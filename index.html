@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>School Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f7f9;
+    --card: #ffffff;
+    --ink: #1b2433;
+    --muted: #5c6678;
+    --line: #d9dee6;
+    --accent: #0f6e6e;
+    --accent-ink: #ffffff;
+    --danger: #b3402a;
+    --ok-bg: #e4f2ee;
+    --err-bg: #f8e6e1;
+    font-family: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; line-height: 1.5; }
+  [hidden] { display: none !important; }
+  h1, h2 { line-height: 1.2; margin: 0; }
+  h2 { font-size: 1.5rem; }
+  p { margin: 0; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* Buttons and fields */
+  .btn { border: 1px solid var(--line); background: var(--card); padding: .45rem .9rem; border-radius: 6px; cursor: pointer; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .btn.danger { color: var(--danger); }
+  .btn.small { padding: .25rem .6rem; font-size: .9rem; }
+  label { display: grid; gap: .25rem; font-size: .95rem; color: var(--muted); }
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date] {
+    border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; background: #fff; color: var(--ink); width: 100%;
+  }
+
+  /* Login */
+  #login { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+  .login-box { width: min(26rem, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 2rem; display: grid; gap: 1.1rem; }
+  .login-box h1 { font-size: 1.6rem; }
+  .login-box .hint { color: var(--muted); font-size: .95rem; }
+
+  /* App shell */
+  #app { display: grid; grid-template-columns: 15rem 1fr; min-height: 100vh; }
+  aside { background: var(--ink); color: #e8ecf3; padding: 1.25rem 1rem; display: flex; flex-direction: column; gap: 1.25rem; }
+  aside .brand { font-weight: 700; font-size: 1.15rem; padding: 0 .5rem; }
+  nav { display: grid; gap: .15rem; }
+  nav button { text-align: left; background: none; border: 0; color: inherit; padding: .55rem .6rem; border-radius: 6px; cursor: pointer; }
+  nav button:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+  nav button[aria-current=page] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  nav button:disabled { opacity: .45; cursor: default; }
+  nav .group { font-size: .85rem; color: #aab4c5; padding: .6rem .6rem .2rem; }
+  .who { margin-top: auto; font-size: .9rem; display: grid; gap: .4rem; padding: 0 .5rem; }
+  .who .role { color: #aab4c5; }
+  .who .btn { background: transparent; color: #e8ecf3; border-color: #4a566b; }
+  main { padding: 2rem clamp(1rem, 4vw, 3rem); max-width: 60rem; width: 100%; display: grid; gap: 1.25rem; align-content: start; }
+  .lead { color: var(--muted); max-width: 60ch; }
+
+  /* Messages */
+  #msg { padding: .65rem .9rem; border-radius: 6px; background: var(--ok-bg); }
+  #msg.error { background: var(--err-bg); }
+
+  /* Add form and rows */
+  .add { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; }
+  .add label { flex: 1 1 10rem; }
+  .rows { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+  .rows li { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .75rem 1rem; border-top: 1px solid var(--line); }
+  .rows li:first-child { border-top: 0; }
+  .rows .grow { flex: 1 1 12rem; font-weight: 700; }
+  .rows .meta { color: var(--muted); font-size: .95rem; }
+  .rows form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; width: 100%; }
+  .rows form label { flex: 1 1 8rem; }
+  .actions { display: flex; gap: .4rem; margin-left: auto; }
+  .badge { background: var(--ok-bg); color: var(--accent); border-radius: 99px; padding: .1rem .6rem; font-size: .85rem; font-weight: 700; }
+  .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 1.5rem; color: var(--muted); }
+
+  @media (max-width: 720px) {
+    #app { grid-template-columns: 1fr; }
+    aside { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem; }
+    nav { display: flex; flex-wrap: wrap; }
+    nav .group { display: none; }
+    .who { margin: 0 0 0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login screen -->
+<section id="login" hidden>
+  <form class="login-box" data-form="login">
+    <h1>School Manager</h1>
+    <p class="hint">Sign in with the account your administrator created for you.</p>
+    <label>Email <input type="email" name="email" autocomplete="username" required></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">Sign in</button>
+    <p id="login-error" class="hint" role="alert" style="color: var(--danger)"></p>
+  </form>
+</section>
+
+<!-- Main app -->
+<div id="app" hidden>
+  <aside>
+    <div class="brand">School Manager</div>
+    <nav id="nav" aria-label="Sections"></nav>
+    <div class="who">
+      <span id="who-name"></span>
+      <span id="who-role" class="role"></span>
+      <button class="btn small" data-action="logout" type="button">Sign out</button>
+    </div>
+  </aside>
+  <main>
+    <div id="msg" role="status" hidden></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<!-- Setup notice, shown only until the two settings below are filled in -->
+<section id="setup" hidden style="padding:2rem;max-width:40rem">
+  <h2>One setup step left</h2>
+  <p class="lead" style="margin-top:.75rem">Open <code>index.html</code>, find <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script, and paste in the values from your Supabase project (Project Settings → API).</p>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// ====== Paste your two values from Supabase: Project Settings -> API ======
+const SUPABASE_URL = 'PASTE_YOUR_PROJECT_URL';
+const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_PUBLIC_KEY';   // the "anon" public key only. Never the service_role key.
+// ========================================================================
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
+
+const state = { user: null, profile: null, view: 'grades', editing: null };
+const isAdmin = () => ['admin', 'super_admin'].includes(state.profile?.role);
+const isSuper = () => state.profile?.role === 'super_admin';
+
+let db;
+let msgTimer;
+
+function notify(text, isError = false) {
+  const el = $('#msg');
+  el.textContent = text;
+  el.className = isError ? 'error' : '';
+  el.hidden = false;
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => { el.hidden = true; }, 6000);
+}
+
+function friendly(error) {
+  if (error.code === '23505') return 'That name already exists. Choose a different one.';
+  if (error.code === '23503') return 'This item is still in use (by students, teachers or payments), so it can’t be deleted.';
+  if (error.code === '42501') return 'Your role doesn’t allow this action.';
+  return error.message || 'Something went wrong. Try again.';
+}
+
+/* ---------- Sections ---------- */
+const SECTIONS = [
+  { id: 'years',  label: 'School years', render: renderYears },
+  { id: 'grades', label: 'Grades',       render: renderGrades },
+];
+const COMING = ['Teachers', 'Assign teachers', 'Students', 'Expenses', 'Fees'];
+
+function renderNav() {
+  $('#nav').innerHTML =
+    '<span class="group">Set up</span>' +
+    SECTIONS.map(s => `<button type="button" data-action="go" data-id="${s.id}" ${state.view === s.id ? 'aria-current="page"' : ''}>${esc(s.label)}</button>`).join('') +
+    '<span class="group">Coming next</span>' +
+    COMING.map(c => `<button type="button" disabled>${esc(c)}</button>`).join('');
+}
+
+async function show(id) {
+  state.view = id;
+  state.editing = null;
+  renderNav();
+  await SECTIONS.find(s => s.id === id).render();
+}
+
+/* ---------- Grades ---------- */
+async function renderGrades() {
+  const { data, error } = await db.from('grades').select('*').order('sort_order').order('name');
+  if (error) return notify(friendly(error), true);
+
+  const rows = data.map(g => state.editing === 'g' + g.id
+    ? `<li><form data-form="grade-edit" data-id="${g.id}">
+         <label>Name <input type="text" name="name" value="${esc(g.name)}" required></label>
+         <label>Order <input type="number" name="sort_order" value="${g.sort_order}"></label>
+         <button class="btn primary small" type="submit">Save changes</button>
+         <button class="btn small" type="button" data-action="cancel">Cancel</button>
+       </form></li>`
+    : `<li><span class="grow">${esc(g.name)}</span><span class="meta">Order ${g.sort_order}</span>
+         <span class="actions">
+           ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="g${g.id}">Edit</button>` : ''}
+           ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-grade" data-id="${g.id}" data-name="${esc(g.name)}">Delete</button>` : ''}
+         </span></li>`).join('');
+
+  $('#view').innerHTML = `
+    <div style="display:grid;gap:1.25rem">
+      <h2>Grades</h2>
+      <p class="lead">The classes of your school. Students and teachers are linked to these, so add them first.</p>
+      ${isAdmin() ? `<form class="add" data-form="grade-add">
+          <label>Grade name <input type="text" name="name" placeholder="e.g. Grade 1" required></label>
+          <label>Order <input type="number" name="sort_order" value="${data.length + 1}"></label>
+          <button class="btn primary" type="submit">Add grade</button>
+        </form>` : ''}
+      ${data.length ? `<ul class="rows">${rows}</ul>`
+        : `<div class="empty">No grades yet. ${isAdmin() ? 'Add your first grade above.' : 'An admin needs to add them.'}</div>`}
+    </div>`;
+}
+
+/* ---------- School years ---------- */
+async function renderYears() {
+  const { data, error } = await db.from('school_years').select('*').order('label', { ascending: false });
+  if (error) return notify(friendly(error), true);
+
+  const rows = data.map(y => state.editing === 'y' + y.id
+    ? `<li><form data-form="year-edit" data-id="${y.id}">
+         <label>Label <input type="text" name="label" value="${esc(y.label)}" required></label>
+         <label>Starts <input type="date" name="start_date" value="${y.start_date ?? ''}"></label>
+         <label>Ends <input type="date" name="end_date" value="${y.end_date ?? ''}"></label>
+         <button class="btn primary small" type="submit">Save changes</button>
+         <button class="btn small" type="button" data-action="cancel">Cancel</button>
+       </form></li>`
+    : `<li><span class="grow">${esc(y.label)}</span>
+         ${y.is_current ? '<span class="badge">Current</span>' : ''}
+         <span class="meta">${y.start_date ? esc(y.start_date) : '…'} to ${y.end_date ? esc(y.end_date) : '…'}</span>
+         <span class="actions">
+           ${isAdmin() && !y.is_current ? `<button class="btn small" type="button" data-action="make-current" data-id="${y.id}">Make current</button>` : ''}
+           ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="y${y.id}">Edit</button>` : ''}
+           ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-year" data-id="${y.id}" data-name="${esc(y.label)}">Delete</button>` : ''}
+         </span></li>`).join('');
+
+  $('#view').innerHTML = `
+    <div style="display:grid;gap:1.25rem">
+      <h2>School years</h2>
+      <p class="lead">Fees, enrollments and teacher assignments are tracked per school year. Mark one year as current.</p>
+      ${isAdmin() ? `<form class="add" data-form="year-add">
+          <label>Label <input type="text" name="label" placeholder="e.g. 2026-2027" required></label>
+          <label>Starts <input type="date" name="start_date"></label>
+          <label>Ends <input type="date" name="end_date"></label>
+          <button class="btn primary" type="submit">Add school year</button>
+        </form>` : ''}
+      ${data.length ? `<ul class="rows">${rows}</ul>`
+        : `<div class="empty">No school years yet. ${isAdmin() ? 'Add the first one above.' : 'An admin needs to add one.'}</div>`}
+    </div>`;
+}
+
+/* ---------- Form submissions ---------- */
+const nullIfEmpty = v => (v === '' || v == null ? null : v);
+
+const FORMS = {
+  async login(f) {
+    $('#login-error').textContent = '';
+    const { error } = await db.auth.signInWithPassword({ email: f.email.trim(), password: f.password });
+    if (error) $('#login-error').textContent = 'Email or password is incorrect.';
+  },
+  async 'grade-add'(f) {
+    const { error } = await db.from('grades').insert({ name: f.name.trim(), sort_order: Number(f.sort_order) || 0 });
+    return done(error, 'Grade added.', renderGrades);
+  },
+  async 'grade-edit'(f, id) {
+    const { error } = await db.from('grades').update({ name: f.name.trim(), sort_order: Number(f.sort_order) || 0 }).eq('id', id);
+    state.editing = null;
+    return done(error, 'Grade updated.', renderGrades);
+  },
+  async 'year-add'(f) {
+    const { error } = await db.from('school_years').insert({ label: f.label.trim(), start_date: nullIfEmpty(f.start_date), end_date: nullIfEmpty(f.end_date) });
+    return done(error, 'School year added.', renderYears);
+  },
+  async 'year-edit'(f, id) {
+    const { error } = await db.from('school_years').update({ label: f.label.trim(), start_date: nullIfEmpty(f.start_date), end_date: nullIfEmpty(f.end_date) }).eq('id', id);
+    state.editing = null;
+    return done(error, 'School year updated.', renderYears);
+  },
+};
+
+async function done(error, okText, rerender) {
+  if (error) { notify(friendly(error), true); return; }
+  notify(okText);
+  await rerender();
+}
+
+document.addEventListener('submit', async e => {
+  const form = e.target.closest('form[data-form]');
+  if (!form) return;
+  e.preventDefault();
+  const handler = FORMS[form.dataset.form];
+  if (handler) await handler(Object.fromEntries(new FormData(form)), form.dataset.id);
+});
+
+/* ---------- Button actions ---------- */
+const ACTIONS = {
+  go: b => show(b.dataset.id),
+  edit: b => { state.editing = b.dataset.key; return SECTIONS.find(s => s.id === state.view).render(); },
+  cancel: () => { state.editing = null; return SECTIONS.find(s => s.id === state.view).render(); },
+  logout: () => db.auth.signOut(),
+  async 'del-grade'(b) {
+    if (!confirm(`Delete the grade “${b.dataset.name}”? This can’t be undone.`)) return;
+    const { error } = await db.from('grades').delete().eq('id', b.dataset.id);
+    return done(error, 'Grade deleted.', renderGrades);
+  },
+  async 'del-year'(b) {
+    if (!confirm(`Delete the school year “${b.dataset.name}”? This can’t be undone.`)) return;
+    const { error } = await db.from('school_years').delete().eq('id', b.dataset.id);
+    return done(error, 'School year deleted.', renderYears);
+  },
+  async 'make-current'(b) {
+    const off = await db.from('school_years').update({ is_current: false }).eq('is_current', true);
+    if (off.error) return notify(friendly(off.error), true);
+    const { error } = await db.from('school_years').update({ is_current: true }).eq('id', b.dataset.id);
+    return done(error, 'Current school year updated.', renderYears);
+  },
+};
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-action]');
+  if (b && ACTIONS[b.dataset.action]) ACTIONS[b.dataset.action](b);
+});
+
+/* ---------- Session handling ---------- */
+async function enter(session) {
+  if (!session) {
+    state.user = null; state.profile = null;
+    $('#app').hidden = true;
+    $('#login').hidden = false;
+    return;
+  }
+  state.user = session.user;
+  const { data, error } = await db.from('profiles').select('full_name, role').eq('id', session.user.id).single();
+  if (error || !data) {
+    await db.auth.signOut();
+    $('#login-error').textContent = 'Your account has no access yet. Ask the administrator.';
+    return;
+  }
+  state.profile = data;
+  $('#who-name').textContent = data.full_name || session.user.email;
+  $('#who-role').textContent = ROLE_LABEL[data.role] || data.role;
+  $('#login').hidden = true;
+  $('#app').hidden = false;
+  await show(state.view);
+}
+
+(async function boot() {
+  if (SUPABASE_URL.startsWith('PASTE') || SUPABASE_ANON_KEY.startsWith('PASTE')) {
+    $('#setup').hidden = false;
+    return;
+  }
+  db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data } = await db.auth.getSession();
+  await enter(data.session);
+  db.auth.onAuthStateChange((event, session) => {
+    // Re-render only when someone signs in or out, not on routine token refreshes.
+    if (event === 'SIGNED_OUT') enter(null);
+    if (event === 'SIGNED_IN' && !state.user) enter(session);
+  });
+})();
+</script>
+</body>
+</html>
