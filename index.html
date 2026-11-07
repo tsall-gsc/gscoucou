@@ -39,9 +39,18 @@
   .btn.danger { color: var(--danger); }
   .btn.small { padding: .25rem .6rem; font-size: .9rem; }
   label { display: grid; gap: .25rem; font-size: .95rem; color: var(--muted); }
-  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date] {
-    border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; background: #fff; color: var(--ink); width: 100%;
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=tel], select {
+    border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; background: #fff; color: var(--ink); width: 100%; font: inherit;
   }
+  label.check { display: flex; align-items: center; gap: .5rem; color: var(--ink); }
+  label.check input { width: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; flex: 2 1 14rem; }
+  .chip { display: inline-flex; align-items: center; gap: .3rem; background: var(--ok-bg); color: var(--ink); border-radius: 99px; padding: .15rem .3rem .15rem .75rem; }
+  .chip-x { border: 0; background: none; cursor: pointer; font-size: 1.1rem; line-height: 1; padding: .1rem .4rem; color: var(--danger); border-radius: 99px; }
+  .chip-x:hover { background: rgba(179, 64, 42, .12); }
+  .pick { display: flex; gap: .5rem; flex: 1 1 14rem; }
+  .pick select { flex: 1; }
+  .year-pick { max-width: 16rem; }
 
   /* Login */
   #login { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
@@ -126,21 +135,17 @@
 <!-- Setup notice, shown only until the two settings below are filled in -->
 <section id="setup" hidden style="padding:2rem;max-width:40rem">
   <h2>One setup step left</h2>
-  <p class="lead" style="margin-top:.75rem">Open <code>index.html</code>, find <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script, and paste in the values from your Supabase project (Project Settings → API).</p>
+  <p class="lead" style="margin-top:.75rem">Open <code>config.js</code> next to this page and paste in the Project URL and the public key from your Supabase project (Project Settings → API).</p>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
 <script>
-// ====== Paste your two values from Supabase: Project Settings -> API ======
-const SUPABASE_URL = 'PASTE_YOUR_PROJECT_URL';
-const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_PUBLIC_KEY';   // the "anon" public key only. Never the service_role key.
-// ========================================================================
-
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
 
-const state = { user: null, profile: null, view: 'grades', editing: null };
+const state = { user: null, profile: null, view: 'grades', editing: null, assignYear: null };
 const isAdmin = () => ['admin', 'super_admin'].includes(state.profile?.role);
 const isSuper = () => state.profile?.role === 'super_admin';
 
@@ -167,8 +172,10 @@ function friendly(error) {
 const SECTIONS = [
   { id: 'years',  label: 'School years', render: renderYears },
   { id: 'grades', label: 'Grades',       render: renderGrades },
+  { id: 'teachers', label: 'Teachers',   render: renderTeachers },
+  { id: 'assign', label: 'Assign teachers', render: renderAssign },
 ];
-const COMING = ['Teachers', 'Assign teachers', 'Students', 'Expenses', 'Fees'];
+const COMING = ['Students', 'Expenses', 'Fees'];
 
 function renderNav() {
   $('#nav').innerHTML =
@@ -254,6 +261,117 @@ async function renderYears() {
     </div>`;
 }
 
+/* ---------- Teachers ---------- */
+async function renderTeachers() {
+  const [tRes, yRes] = await Promise.all([
+    db.from('teachers').select('*, teacher_assignments(school_year_id, grades(name, sort_order))').order('full_name'),
+    db.from('school_years').select('id, label').eq('is_current', true).maybeSingle(),
+  ]);
+  if (tRes.error) return notify(friendly(tRes.error), true);
+  const yearId = yRes.data?.id;
+  const classesOf = t => (t.teacher_assignments || [])
+    .filter(a => a.school_year_id === yearId && a.grades)
+    .sort((a, b) => a.grades.sort_order - b.grades.sort_order)
+    .map(a => a.grades.name).join(', ');
+
+  const rows = tRes.data.map(t => {
+    if (state.editing === 't' + t.id) {
+      return `<li><form data-form="teacher-edit" data-id="${t.id}">
+        <label>Full name <input type="text" name="full_name" value="${esc(t.full_name)}" required></label>
+        <label>Phone <input type="tel" name="phone" value="${esc(t.phone)}"></label>
+        <label>Email <input type="email" name="email" value="${esc(t.email)}"></label>
+        <label class="check"><input type="checkbox" name="active" ${t.active ? 'checked' : ''}> Currently teaching</label>
+        <button class="btn primary small" type="submit">Save changes</button>
+        <button class="btn small" type="button" data-action="cancel">Cancel</button>
+      </form></li>`;
+    }
+    const classes = classesOf(t);
+    return `<li><span class="grow">${esc(t.full_name)}</span>
+      ${t.active ? '' : '<span class="meta">Not teaching</span>'}
+      <span class="meta">${classes ? 'Class ' + esc(classes) : 'No class this year'}</span>
+      <span class="meta">${esc(t.phone || '')}${t.email ? ' · ' + esc(t.email) : ''}</span>
+      <span class="actions">
+        ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="t${t.id}">Edit</button>` : ''}
+        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(t.full_name)}">Delete</button>` : ''}
+      </span></li>`;
+  }).join('');
+
+  $('#view').innerHTML = `
+    <div style="display:grid;gap:1.25rem">
+      <h2>Teachers</h2>
+      <p class="lead">Everyone who teaches at the school. The class shown is for the current school year. Use Assign teachers to change it.</p>
+      ${isAdmin() ? `<form class="add" data-form="teacher-add">
+          <label>Full name <input type="text" name="full_name" required></label>
+          <label>Phone <input type="tel" name="phone"></label>
+          <label>Email <input type="email" name="email"></label>
+          <button class="btn primary" type="submit">Add teacher</button>
+        </form>` : ''}
+      ${tRes.data.length ? `<ul class="rows">${rows}</ul>`
+        : `<div class="empty">No teachers yet. ${isAdmin() ? 'Add the first one above.' : 'An admin needs to add them.'}</div>`}
+    </div>`;
+}
+
+/* ---------- Assign teachers to grades ---------- */
+async function renderAssign() {
+  const [yRes, gRes, tRes] = await Promise.all([
+    db.from('school_years').select('id, label, is_current').order('label', { ascending: false }),
+    db.from('grades').select('id, name').order('sort_order').order('name'),
+    db.from('teachers').select('id, full_name').eq('active', true).order('full_name'),
+  ]);
+  const err = yRes.error || gRes.error || tRes.error;
+  if (err) return notify(friendly(err), true);
+
+  const years = yRes.data;
+  if (!years.length) {
+    $('#view').innerHTML = `<div style="display:grid;gap:1.25rem"><h2>Assign teachers</h2>
+      <div class="empty">Add a school year first, in the School years section.</div></div>`;
+    return;
+  }
+  const yearId = years.find(y => String(y.id) === String(state.assignYear))?.id
+    ?? years.find(y => y.is_current)?.id ?? years[0].id;
+  state.assignYear = yearId;
+
+  const aRes = await db.from('teacher_assignments')
+    .select('id, grade_id, teacher_id, teachers(full_name)').eq('school_year_id', yearId);
+  if (aRes.error) return notify(friendly(aRes.error), true);
+
+  const byGrade = {};
+  aRes.data.forEach(a => (byGrade[a.grade_id] ||= []).push(a));
+
+  const rows = gRes.data.map(g => {
+    const list = byGrade[g.id] || [];
+    const taken = new Set(list.map(a => a.teacher_id));
+    const options = tRes.data.filter(t => !taken.has(t.id));
+    const chips = list.map(a => `<span class="chip">${esc(a.teachers?.full_name)}${isAdmin()
+      ? `<button type="button" class="chip-x" data-action="unassign" data-id="${a.id}" aria-label="Remove ${esc(a.teachers?.full_name)} from ${esc(g.name)}">×</button>` : ''}</span>`).join('');
+    const picker = isAdmin() && options.length
+      ? `<form class="pick" data-form="assign-add">
+           <input type="hidden" name="grade_id" value="${g.id}">
+           <input type="hidden" name="year_id" value="${yearId}">
+           <select name="teacher_id" required aria-label="Add a teacher to ${esc(g.name)}">
+             <option value="">Add a teacher…</option>
+             ${options.map(t => `<option value="${t.id}">${esc(t.full_name)}</option>`).join('')}
+           </select>
+           <button class="btn small primary" type="submit">Assign</button>
+         </form>` : '';
+    return `<li><span class="grow">${esc(g.name)}</span>
+      <span class="chips">${chips || '<span class="meta">No teacher yet</span>'}</span>${picker}</li>`;
+  }).join('');
+
+  $('#view').innerHTML = `
+    <div style="display:grid;gap:1.25rem">
+      <h2>Assign teachers</h2>
+      <p class="lead">Choose which teacher teaches each class in a given school year. A class can have more than one teacher.</p>
+      <label class="year-pick">School year
+        <select data-change="year">
+          ${years.map(y => `<option value="${y.id}" ${y.id === yearId ? 'selected' : ''}>${esc(y.label)}${y.is_current ? ' (current)' : ''}</option>`).join('')}
+        </select>
+      </label>
+      ${gRes.data.length ? `<ul class="rows">${rows}</ul>`
+        : `<div class="empty">No grades yet. Add them in the Grades section first.</div>`}
+    </div>`;
+}
+
 /* ---------- Form submissions ---------- */
 const nullIfEmpty = v => (v === '' || v == null ? null : v);
 
@@ -280,6 +398,26 @@ const FORMS = {
     const { error } = await db.from('school_years').update({ label: f.label.trim(), start_date: nullIfEmpty(f.start_date), end_date: nullIfEmpty(f.end_date) }).eq('id', id);
     state.editing = null;
     return done(error, 'School year updated.', renderYears);
+  },
+  async 'teacher-add'(f) {
+    const { error } = await db.from('teachers').insert({
+      full_name: f.full_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
+    });
+    return done(error, 'Teacher added.', renderTeachers);
+  },
+  async 'teacher-edit'(f, id) {
+    const { error } = await db.from('teachers').update({
+      full_name: f.full_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
+      active: f.active === 'on',
+    }).eq('id', id);
+    state.editing = null;
+    return done(error, 'Teacher updated.', renderTeachers);
+  },
+  async 'assign-add'(f) {
+    const { error } = await db.from('teacher_assignments').insert({
+      teacher_id: Number(f.teacher_id), grade_id: Number(f.grade_id), school_year_id: Number(f.year_id),
+    });
+    return done(error, 'Teacher assigned.', renderAssign);
   },
 };
 
@@ -319,11 +457,29 @@ const ACTIONS = {
     const { error } = await db.from('school_years').update({ is_current: true }).eq('id', b.dataset.id);
     return done(error, 'Current school year updated.', renderYears);
   },
+  async 'del-teacher'(b) {
+    if (!confirm(`Delete ${b.dataset.name}? This also removes their class assignments and pay records, and can’t be undone. To keep the history, edit the teacher and untick “Currently teaching” instead.`)) return;
+    const { error } = await db.from('teachers').delete().eq('id', b.dataset.id);
+    return done(error, 'Teacher deleted.', renderTeachers);
+  },
+  async unassign(b) {
+    const { error } = await db.from('teacher_assignments').delete().eq('id', b.dataset.id);
+    return done(error, 'Teacher removed from the class.', renderAssign);
+  },
+};
+
+const CHANGES = {
+  year: el => { state.assignYear = el.value; return renderAssign(); },
 };
 
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-action]');
   if (b && ACTIONS[b.dataset.action]) ACTIONS[b.dataset.action](b);
+});
+
+document.addEventListener('change', e => {
+  const el = e.target.closest('[data-change]');
+  if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
 });
 
 /* ---------- Session handling ---------- */
@@ -350,7 +506,8 @@ async function enter(session) {
 }
 
 (async function boot() {
-  if (SUPABASE_URL.startsWith('PASTE') || SUPABASE_ANON_KEY.startsWith('PASTE')) {
+  if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined'
+      || SUPABASE_URL.startsWith('PASTE') || SUPABASE_ANON_KEY.startsWith('PASTE')) {
     $('#setup').hidden = false;
     return;
   }
