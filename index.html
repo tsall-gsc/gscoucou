@@ -381,7 +381,7 @@ async function renderStudents() {
   const [sRes, yRes, gRes] = await Promise.all([
     db.from('students')
       .select('*, enrollments(id, school_year_id, grade_id, grades(name, sort_order))')
-      .order('last_name').order('first_name').limit(5000),
+      .order('full_name').limit(5000),
     db.from('school_years').select('id, label').eq('is_current', true).maybeSingle(),
     db.from('grades').select('id, name').order('sort_order').order('name'),
   ]);
@@ -403,8 +403,7 @@ async function renderStudents() {
     const gname = e?.grades?.name || '';
     if (state.editing === 's' + s.id) {
       return `<li><form data-form="student-edit" data-id="${s.id}">
-        <label>First name <input type="text" name="first_name" value="${esc(s.first_name)}" required></label>
-        <label>Last name <input type="text" name="last_name" value="${esc(s.last_name)}" required></label>
+        <label>Full name <input type="text" name="full_name" value="${esc(s.full_name)}" required></label>
         ${gradeField(gid)}
         <label>Parent or guardian <input type="text" name="guardian_name" value="${esc(s.guardian_name)}"></label>
         <label>Parent phone <input type="tel" name="guardian_phone" value="${esc(s.guardian_phone)}"></label>
@@ -415,16 +414,16 @@ async function renderStudents() {
         <button class="btn small" type="button" data-action="cancel">Cancel</button>
       </form></li>`;
     }
-    const q = [s.first_name, s.last_name, s.guardian_name, s.guardian_phone, gname].filter(Boolean).join(' ').toLowerCase();
+    const q = [s.full_name, s.guardian_name, s.guardian_phone, gname].filter(Boolean).join(' ').toLowerCase();
     const contact = [s.guardian_name, s.guardian_phone].filter(Boolean).map(esc).join(' · ');
     return `<li data-grade="${gid}" data-q="${esc(q)}">
-      <span class="grow">${esc(s.last_name)} ${esc(s.first_name)}</span>
+      <span class="grow">${esc(s.full_name)}</span>
       ${gname ? `<span class="badge">${esc(gname)}</span>` : '<span class="meta">No grade</span>'}
       ${s.active ? '' : '<span class="meta">Not enrolled</span>'}
       <span class="meta">${contact}</span>
       <span class="actions">
         <button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Edit</button>
-        ${isAdmin() ? `<button class="btn small danger" type="button" data-action="del-student" data-id="${s.id}" data-name="${esc(s.first_name + ' ' + s.last_name)}">Delete</button>` : ''}
+        ${isAdmin() ? `<button class="btn small danger" type="button" data-action="del-student" data-id="${s.id}" data-name="${esc(s.full_name)}">Delete</button>` : ''}
       </span></li>`;
   }).join('');
 
@@ -447,8 +446,7 @@ async function renderStudents() {
       <p class="lead">Every student with their grade for the current school year and their parent’s contact. Anyone with an account can add and edit students.</p>
       ${yearId ? '' : '<div class="empty">No school year is marked as current, so grades can’t be shown or set. Mark one in School years.</div>'}
       <form class="add" data-form="student-add">
-        <label>First name <input type="text" name="first_name" required></label>
-        <label>Last name <input type="text" name="last_name" required></label>
+        <label>Full name <input type="text" name="full_name" required></label>
         ${gradeField('')}
         <label>Parent or guardian <input type="text" name="guardian_name"></label>
         <label>Parent phone <input type="tel" name="guardian_phone"></label>
@@ -525,7 +523,7 @@ const FORMS = {
   },
   async 'student-add'(f) {
     const { data, error } = await db.from('students').insert({
-      first_name: f.first_name.trim(), last_name: f.last_name.trim(),
+      full_name: f.full_name.trim(),
       guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
       guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
     }).select('id').single();
@@ -543,7 +541,7 @@ const FORMS = {
   },
   async 'student-edit'(f, id) {
     const { error } = await db.from('students').update({
-      first_name: f.first_name.trim(), last_name: f.last_name.trim(),
+      full_name: f.full_name.trim(),
       guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
       guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
       birth_date: nullIfEmpty(f.birth_date),
