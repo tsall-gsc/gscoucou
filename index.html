@@ -97,9 +97,14 @@
   .table-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
   table.grid { width: 100%; border-collapse: collapse; min-width: 46rem; }
   .grid th { text-align: left; font-weight: 700; color: var(--muted); font-size: .95rem; padding: .6rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  .grid th:nth-child(2) { width: 9rem; }
-  .grid th:nth-child(4) { width: 11rem; }
-  .grid th:nth-child(5) { width: 15rem; }
+  #stu-table th:nth-child(2) { width: 9rem; }
+  #stu-table th:nth-child(4) { width: 11rem; }
+  #stu-table th:nth-child(5) { width: 15rem; }
+  #teach-table { min-width: 58rem; }
+  #teach-table th:nth-child(3) { width: 11rem; }
+  #teach-table th:nth-child(5) { width: 7rem; }
+  #teach-table th:nth-child(6) { width: 15rem; }
+  .ro { display: block; padding: .4rem .5rem; }
   .grid td { padding: .2rem .3rem; border-top: 1px solid var(--line); vertical-align: middle; }
   .grid input, .grid select { border-color: transparent; background: transparent; padding: .4rem .5rem; }
   .grid input:hover, .grid select:hover { border-color: var(--line); }
@@ -322,32 +327,36 @@ async function renderTeachers() {
     .map(a => a.grades.name).join(', ');
 
   const rows = tRes.data.map(t => {
-    if (state.editing === 't' + t.id) {
-      return `<li><form data-form="teacher-edit" data-id="${t.id}">
-        <label>First name <input type="text" name="first_name" value="${esc(t.first_name)}" required></label>
-        <label>Last name <input type="text" name="last_name" value="${esc(t.last_name)}" required></label>
-        <label>Phone <input type="tel" name="phone" value="${esc(t.phone)}"></label>
-        <label>Email <input type="email" name="email" value="${esc(t.email)}"></label>
-        <label class="check"><input type="checkbox" name="active" ${t.active ? 'checked' : ''}> Currently teaching</label>
-        <button class="btn primary small" type="submit">Save changes</button>
-        <button class="btn small" type="button" data-action="cancel">Cancel</button>
-      </form></li>`;
-    }
+    const name = tname(t);
+    const cell = (field, value, type, label) => isAdmin()
+      ? `<input type="${type}" data-table="teachers" data-field="${field}" data-id="${t.id}" data-orig="${esc(value)}" value="${esc(value)}" aria-label="${label} — ${esc(name)}">`
+      : `<span class="ro">${esc(value)}</span>`;
     const classes = classesOf(t);
-    return `<li><span class="grow">${esc(tname(t))}</span>
-      ${t.active ? '' : '<span class="meta">Not teaching</span>'}
-      <span class="meta">${classes ? 'Class ' + esc(classes) : 'No class this year'}</span>
-      <span class="meta">${esc(t.phone || '')}${t.email ? ' · ' + esc(t.email) : ''}</span>
-      <span class="actions">
-        ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="t${t.id}">Edit</button>` : ''}
-        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(tname(t))}">Delete</button>` : ''}
-      </span></li>`;
+    const main = `<tr class="${t.active ? '' : 'inactive'}" data-id="${t.id}">
+      <td>${cell('first_name', t.first_name ?? '', 'text', 'First name')}${t.active ? '' : '<small class="meta">Not teaching</small>'}</td>
+      <td>${cell('last_name', t.last_name ?? '', 'text', 'Last name')}</td>
+      <td>${cell('phone', t.phone ?? '', 'tel', 'Phone')}</td>
+      <td>${cell('email', t.email ?? '', 'email', 'Email')}</td>
+      <td>${classes ? `<span class="badge">${esc(classes)}</span>` : '<span class="meta">—</span>'}</td>
+      <td><div class="tools"><span class="state" role="status"></span>
+        ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="t${t.id}">Details</button>` : ''}
+        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(name)}">Delete</button>` : ''}
+      </div></td></tr>`;
+    const detail = isAdmin() && state.editing === 't' + t.id
+      ? `<tr class="detail"><td colspan="6"><form data-form="teacher-details" data-id="${t.id}">
+          <label class="check"><input type="checkbox" name="active" ${t.active ? 'checked' : ''}> Currently teaching</label>
+          <button class="btn primary small" type="submit">Save</button>
+          <button class="btn small" type="button" data-action="cancel">Cancel</button>
+        </form></td></tr>` : '';
+    return main + detail;
   }).join('');
 
   $('#view').innerHTML = `
     <div style="display:grid;gap:1.25rem">
       <h2>Teachers</h2>
-      <p class="lead">Everyone who teaches at the school. The class shown is for the current school year. Use Assign teachers to change it.</p>
+      <p class="lead">${isAdmin()
+        ? 'Click any name, phone or email in the list to change it. Each change is saved as soon as you leave the field. The class shown is for the current school year. Use Assign teachers to change it.'
+        : 'Everyone who teaches at the school, with their class for the current school year. Only admins can make changes.'}</p>
       ${isAdmin() ? `<form class="add" data-form="teacher-add">
           <label>First name <input type="text" name="first_name" required></label>
           <label>Last name <input type="text" name="last_name" required></label>
@@ -355,9 +364,36 @@ async function renderTeachers() {
           <label>Email <input type="email" name="email"></label>
           <button class="btn primary" type="submit">Add teacher</button>
         </form>` : ''}
-      ${tRes.data.length ? `<ul class="rows">${rows}</ul>`
+      ${tRes.data.length ? `<div class="table-wrap"><table class="grid" id="teach-table">
+          <thead><tr><th>First name</th><th>Last name</th><th>Phone</th><th>Email</th><th>Class</th><th><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody>${rows}</tbody></table></div>`
         : `<div class="empty">No teachers yet. ${isAdmin() ? 'Add the first one above.' : 'An admin needs to add them.'}</div>`}
     </div>`;
+}
+
+// Saves one cell of the teachers table as soon as the person leaves it.
+async function saveTeacherField(el) {
+  const id = Number(el.dataset.id);
+  const field = el.dataset.field;
+  const row = el.closest('tr');
+  const flag = row.querySelector('.state');
+  const say = (text, cls) => { flag.textContent = text; flag.className = 'state ' + cls; };
+  const orig = el.dataset.orig;
+  const value = el.value.trim();
+
+  if (value === orig) { if (el.value !== value) el.value = value; return; }
+  if ((field === 'first_name' || field === 'last_name') && !value) { el.value = orig; say('Name can’t be empty', 'bad'); return; }
+  if (field === 'email' && value && !el.checkValidity()) { el.value = orig; say('Not a valid email', 'bad'); return; }
+
+  say('Saving…', '');
+  const res = await db.from('teachers').update({ [field]: nullIfEmpty(value) }).eq('id', id).select('id');
+  const error = res.error || (res.data?.length ? null : { message: 'Your role doesn’t allow this change.' });
+  if (error) { el.value = orig; say('Not saved: ' + friendly(error), 'bad'); return; }
+
+  el.value = value;
+  el.dataset.orig = value;
+  say('Saved ✓', 'ok');
+  setTimeout(() => { if (flag.textContent === 'Saved ✓') say('', ''); }, 2500);
 }
 
 /* ---------- Assign teachers to grades ---------- */
@@ -768,11 +804,8 @@ const FORMS = {
     });
     return done(error, 'Teacher added.', renderTeachers);
   },
-  async 'teacher-edit'(f, id) {
-    const { error } = await db.from('teachers').update({
-      first_name: f.first_name.trim(), last_name: f.last_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
-      active: f.active === 'on',
-    }).eq('id', id);
+  async 'teacher-details'(f, id) {
+    const { error } = await db.from('teachers').update({ active: f.active === 'on' }).eq('id', id);
     state.editing = null;
     return done(error, 'Teacher updated.', renderTeachers);
   },
@@ -935,7 +968,7 @@ document.addEventListener('click', e => {
 
 document.addEventListener('change', e => {
   const cellEl = e.target.closest('[data-field]');
-  if (cellEl) { saveStudentField(cellEl); return; }
+  if (cellEl) { (cellEl.dataset.table === 'teachers' ? saveTeacherField : saveStudentField)(cellEl); return; }
   const el = e.target.closest('[data-change]');
   if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
 });
