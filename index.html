@@ -142,6 +142,7 @@
 <script src="config.js"></script>
 <script>
 const $ = s => document.querySelector(s);
+const tname = t => [t?.first_name, t?.last_name].filter(Boolean).join(' ');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
 
@@ -264,7 +265,7 @@ async function renderYears() {
 /* ---------- Teachers ---------- */
 async function renderTeachers() {
   const [tRes, yRes] = await Promise.all([
-    db.from('teachers').select('*, teacher_assignments(school_year_id, grades(name, sort_order))').order('full_name'),
+    db.from('teachers').select('*, teacher_assignments(school_year_id, grades(name, sort_order))').order('last_name').order('first_name'),
     db.from('school_years').select('id, label').eq('is_current', true).maybeSingle(),
   ]);
   if (tRes.error) return notify(friendly(tRes.error), true);
@@ -277,7 +278,8 @@ async function renderTeachers() {
   const rows = tRes.data.map(t => {
     if (state.editing === 't' + t.id) {
       return `<li><form data-form="teacher-edit" data-id="${t.id}">
-        <label>Full name <input type="text" name="full_name" value="${esc(t.full_name)}" required></label>
+        <label>First name <input type="text" name="first_name" value="${esc(t.first_name)}" required></label>
+        <label>Last name <input type="text" name="last_name" value="${esc(t.last_name)}" required></label>
         <label>Phone <input type="tel" name="phone" value="${esc(t.phone)}"></label>
         <label>Email <input type="email" name="email" value="${esc(t.email)}"></label>
         <label class="check"><input type="checkbox" name="active" ${t.active ? 'checked' : ''}> Currently teaching</label>
@@ -286,13 +288,13 @@ async function renderTeachers() {
       </form></li>`;
     }
     const classes = classesOf(t);
-    return `<li><span class="grow">${esc(t.full_name)}</span>
+    return `<li><span class="grow">${esc(tname(t))}</span>
       ${t.active ? '' : '<span class="meta">Not teaching</span>'}
       <span class="meta">${classes ? 'Class ' + esc(classes) : 'No class this year'}</span>
       <span class="meta">${esc(t.phone || '')}${t.email ? ' · ' + esc(t.email) : ''}</span>
       <span class="actions">
         ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="t${t.id}">Edit</button>` : ''}
-        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(t.full_name)}">Delete</button>` : ''}
+        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(tname(t))}">Delete</button>` : ''}
       </span></li>`;
   }).join('');
 
@@ -301,7 +303,8 @@ async function renderTeachers() {
       <h2>Teachers</h2>
       <p class="lead">Everyone who teaches at the school. The class shown is for the current school year. Use Assign teachers to change it.</p>
       ${isAdmin() ? `<form class="add" data-form="teacher-add">
-          <label>Full name <input type="text" name="full_name" required></label>
+          <label>First name <input type="text" name="first_name" required></label>
+          <label>Last name <input type="text" name="last_name" required></label>
           <label>Phone <input type="tel" name="phone"></label>
           <label>Email <input type="email" name="email"></label>
           <button class="btn primary" type="submit">Add teacher</button>
@@ -316,7 +319,7 @@ async function renderAssign() {
   const [yRes, gRes, tRes] = await Promise.all([
     db.from('school_years').select('id, label, is_current').order('label', { ascending: false }),
     db.from('grades').select('id, name').order('sort_order').order('name'),
-    db.from('teachers').select('id, full_name').eq('active', true).order('full_name'),
+    db.from('teachers').select('id, first_name, last_name').eq('active', true).order('last_name').order('first_name'),
   ]);
   const err = yRes.error || gRes.error || tRes.error;
   if (err) return notify(friendly(err), true);
@@ -332,7 +335,7 @@ async function renderAssign() {
   state.assignYear = yearId;
 
   const aRes = await db.from('teacher_assignments')
-    .select('id, grade_id, teacher_id, teachers(full_name)').eq('school_year_id', yearId);
+    .select('id, grade_id, teacher_id, teachers(first_name, last_name)').eq('school_year_id', yearId);
   if (aRes.error) return notify(friendly(aRes.error), true);
 
   const byGrade = {};
@@ -342,15 +345,15 @@ async function renderAssign() {
     const list = byGrade[g.id] || [];
     const taken = new Set(list.map(a => a.teacher_id));
     const options = tRes.data.filter(t => !taken.has(t.id));
-    const chips = list.map(a => `<span class="chip">${esc(a.teachers?.full_name)}${isAdmin()
-      ? `<button type="button" class="chip-x" data-action="unassign" data-id="${a.id}" aria-label="Remove ${esc(a.teachers?.full_name)} from ${esc(g.name)}">×</button>` : ''}</span>`).join('');
+    const chips = list.map(a => `<span class="chip">${esc(tname(a.teachers))}${isAdmin()
+      ? `<button type="button" class="chip-x" data-action="unassign" data-id="${a.id}" aria-label="Remove ${esc(tname(a.teachers))} from ${esc(g.name)}">×</button>` : ''}</span>`).join('');
     const picker = isAdmin() && options.length
       ? `<form class="pick" data-form="assign-add">
            <input type="hidden" name="grade_id" value="${g.id}">
            <input type="hidden" name="year_id" value="${yearId}">
            <select name="teacher_id" required aria-label="Add a teacher to ${esc(g.name)}">
              <option value="">Add a teacher…</option>
-             ${options.map(t => `<option value="${t.id}">${esc(t.full_name)}</option>`).join('')}
+             ${options.map(t => `<option value="${t.id}">${esc(tname(t))}</option>`).join('')}
            </select>
            <button class="btn small primary" type="submit">Assign</button>
          </form>` : '';
@@ -401,13 +404,13 @@ const FORMS = {
   },
   async 'teacher-add'(f) {
     const { error } = await db.from('teachers').insert({
-      full_name: f.full_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
+      first_name: f.first_name.trim(), last_name: f.last_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
     });
     return done(error, 'Teacher added.', renderTeachers);
   },
   async 'teacher-edit'(f, id) {
     const { error } = await db.from('teachers').update({
-      full_name: f.full_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
+      first_name: f.first_name.trim(), last_name: f.last_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
       active: f.active === 'on',
     }).eq('id', id);
     state.editing = null;
