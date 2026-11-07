@@ -39,7 +39,7 @@
   .btn.danger { color: var(--danger); }
   .btn.small { padding: .25rem .6rem; font-size: .9rem; }
   label { display: grid; gap: .25rem; font-size: .95rem; color: var(--muted); }
-  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=tel], select {
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=tel], input[type=search], select {
     border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; background: #fff; color: var(--ink); width: 100%; font: inherit;
   }
   label.check { display: flex; align-items: center; gap: .5rem; color: var(--ink); }
@@ -146,7 +146,7 @@ const tname = t => [t?.first_name, t?.last_name].filter(Boolean).join(' ');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
 
-const state = { user: null, profile: null, view: 'grades', editing: null, assignYear: null };
+const state = { user: null, profile: null, view: 'grades', editing: null, assignYear: null, stuGrade: '', stuQuery: '', yearId: null };
 const isAdmin = () => ['admin', 'super_admin'].includes(state.profile?.role);
 const isSuper = () => state.profile?.role === 'super_admin';
 
@@ -175,8 +175,9 @@ const SECTIONS = [
   { id: 'grades', label: 'Grades',       render: renderGrades },
   { id: 'teachers', label: 'Teachers',   render: renderTeachers },
   { id: 'assign', label: 'Assign teachers', render: renderAssign },
+  { id: 'students', label: 'Students', render: renderStudents },
 ];
-const COMING = ['Students', 'Expenses', 'Fees'];
+const COMING = ['Expenses', 'Fees'];
 
 function renderNav() {
   $('#nav').innerHTML =
@@ -375,6 +376,106 @@ async function renderAssign() {
     </div>`;
 }
 
+/* ---------- Students ---------- */
+async function renderStudents() {
+  const [sRes, yRes, gRes] = await Promise.all([
+    db.from('students')
+      .select('*, enrollments(id, school_year_id, grade_id, grades(name, sort_order))')
+      .order('last_name').order('first_name').limit(5000),
+    db.from('school_years').select('id, label').eq('is_current', true).maybeSingle(),
+    db.from('grades').select('id, name').order('sort_order').order('name'),
+  ]);
+  const err = sRes.error || gRes.error;
+  if (err) return notify(friendly(err), true);
+
+  const yearId = yRes.data?.id ?? null;
+  state.yearId = yearId;
+  const grades = gRes.data;
+  const enrOf = s => (s.enrollments || []).find(e => e.school_year_id === yearId);
+  const gradeOptions = selected => '<option value="">No grade</option>' +
+    grades.map(g => `<option value="${g.id}" ${String(g.id) === String(selected) ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
+  const gradeField = selected => yearId
+    ? `<label>Grade <select name="grade_id">${gradeOptions(selected)}</select></label>` : '';
+
+  const rows = sRes.data.map(s => {
+    const e = enrOf(s);
+    const gid = e ? String(e.grade_id) : '';
+    const gname = e?.grades?.name || '';
+    if (state.editing === 's' + s.id) {
+      return `<li><form data-form="student-edit" data-id="${s.id}">
+        <label>First name <input type="text" name="first_name" value="${esc(s.first_name)}" required></label>
+        <label>Last name <input type="text" name="last_name" value="${esc(s.last_name)}" required></label>
+        ${gradeField(gid)}
+        <label>Parent or guardian <input type="text" name="guardian_name" value="${esc(s.guardian_name)}"></label>
+        <label>Parent phone <input type="tel" name="guardian_phone" value="${esc(s.guardian_phone)}"></label>
+        <label>Birth date <input type="date" name="birth_date" value="${s.birth_date ?? ''}"></label>
+        <label>Notes <input type="text" name="notes" value="${esc(s.notes)}"></label>
+        <label class="check"><input type="checkbox" name="active" ${s.active ? 'checked' : ''}> Currently enrolled</label>
+        <button class="btn primary small" type="submit">Save changes</button>
+        <button class="btn small" type="button" data-action="cancel">Cancel</button>
+      </form></li>`;
+    }
+    const q = [s.first_name, s.last_name, s.guardian_name, s.guardian_phone, gname].filter(Boolean).join(' ').toLowerCase();
+    const contact = [s.guardian_name, s.guardian_phone].filter(Boolean).map(esc).join(' · ');
+    return `<li data-grade="${gid}" data-q="${esc(q)}">
+      <span class="grow">${esc(s.last_name)} ${esc(s.first_name)}</span>
+      ${gname ? `<span class="badge">${esc(gname)}</span>` : '<span class="meta">No grade</span>'}
+      ${s.active ? '' : '<span class="meta">Not enrolled</span>'}
+      <span class="meta">${contact}</span>
+      <span class="actions">
+        <button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Edit</button>
+        ${isAdmin() ? `<button class="btn small danger" type="button" data-action="del-student" data-id="${s.id}" data-name="${esc(s.first_name + ' ' + s.last_name)}">Delete</button>` : ''}
+      </span></li>`;
+  }).join('');
+
+  const filterBar = sRes.data.length ? `
+    <div class="add">
+      <label>Search <input type="search" id="stu-q" placeholder="Name, parent or phone" value="${esc(state.stuQuery)}"></label>
+      <label>Grade
+        <select data-change="stu-filter">
+          <option value="">All grades</option>
+          ${grades.map(g => `<option value="${g.id}" ${String(g.id) === state.stuGrade ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+          <option value="none" ${state.stuGrade === 'none' ? 'selected' : ''}>No grade</option>
+        </select>
+      </label>
+      <span class="meta" id="stu-count" role="status"></span>
+    </div>` : '';
+
+  $('#view').innerHTML = `
+    <div style="display:grid;gap:1.25rem">
+      <h2>Students</h2>
+      <p class="lead">Every student with their grade for the current school year and their parent’s contact. Anyone with an account can add and edit students.</p>
+      ${yearId ? '' : '<div class="empty">No school year is marked as current, so grades can’t be shown or set. Mark one in School years.</div>'}
+      <form class="add" data-form="student-add">
+        <label>First name <input type="text" name="first_name" required></label>
+        <label>Last name <input type="text" name="last_name" required></label>
+        ${gradeField('')}
+        <label>Parent or guardian <input type="text" name="guardian_name"></label>
+        <label>Parent phone <input type="tel" name="guardian_phone"></label>
+        <button class="btn primary" type="submit">Add student</button>
+      </form>
+      ${filterBar}
+      ${sRes.data.length ? `<ul class="rows" id="stu-list">${rows}</ul>`
+        : '<div class="empty">No students yet. Add the first one above.</div>'}
+    </div>`;
+  applyStudentFilter();
+}
+
+function applyStudentFilter() {
+  const g = state.stuGrade;
+  const q = state.stuQuery.trim().toLowerCase();
+  let shown = 0, total = 0;
+  document.querySelectorAll('#stu-list li[data-q]').forEach(li => {
+    total++;
+    const okGrade = !g || (g === 'none' ? li.dataset.grade === '' : li.dataset.grade === g);
+    const okText = !q || li.dataset.q.includes(q);
+    li.hidden = !(okGrade && okText);
+    if (!li.hidden) shown++;
+  });
+  const c = $('#stu-count');
+  if (c) c.textContent = `${shown} of ${total} students`;
+}
+
 /* ---------- Form submissions ---------- */
 const nullIfEmpty = v => (v === '' || v == null ? null : v);
 
@@ -421,6 +522,43 @@ const FORMS = {
       teacher_id: Number(f.teacher_id), grade_id: Number(f.grade_id), school_year_id: Number(f.year_id),
     });
     return done(error, 'Teacher assigned.', renderAssign);
+  },
+  async 'student-add'(f) {
+    const { data, error } = await db.from('students').insert({
+      first_name: f.first_name.trim(), last_name: f.last_name.trim(),
+      guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
+      guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
+    }).select('id').single();
+    if (error) return notify(friendly(error), true);
+    if (f.grade_id && state.yearId) {
+      const enr = await db.from('enrollments').insert({
+        student_id: data.id, school_year_id: state.yearId, grade_id: Number(f.grade_id),
+      });
+      if (enr.error) {
+        await renderStudents();
+        return notify('Student added, but the grade could not be set: ' + friendly(enr.error), true);
+      }
+    }
+    return done(null, 'Student added.', renderStudents);
+  },
+  async 'student-edit'(f, id) {
+    const { error } = await db.from('students').update({
+      first_name: f.first_name.trim(), last_name: f.last_name.trim(),
+      guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
+      guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
+      birth_date: nullIfEmpty(f.birth_date),
+      notes: nullIfEmpty((f.notes || '').trim()),
+      active: f.active === 'on',
+    }).eq('id', id);
+    if (error) return notify(friendly(error), true);
+    if (f.grade_id && state.yearId) {
+      const enr = await db.from('enrollments').upsert(
+        { student_id: Number(id), school_year_id: state.yearId, grade_id: Number(f.grade_id) },
+        { onConflict: 'student_id,school_year_id' });
+      if (enr.error) return notify('Saved, but the grade could not be changed: ' + friendly(enr.error), true);
+    }
+    state.editing = null;
+    return done(null, 'Student updated.', renderStudents);
   },
 };
 
@@ -469,10 +607,16 @@ const ACTIONS = {
     const { error } = await db.from('teacher_assignments').delete().eq('id', b.dataset.id);
     return done(error, 'Teacher removed from the class.', renderAssign);
   },
+  async 'del-student'(b) {
+    if (!confirm(`Delete ${b.dataset.name}? This also removes their enrollments and fee payments, and can’t be undone. To keep the history, edit the student and untick “Currently enrolled” instead.`)) return;
+    const { error } = await db.from('students').delete().eq('id', b.dataset.id);
+    return done(error, 'Student deleted.', renderStudents);
+  },
 };
 
 const CHANGES = {
   year: el => { state.assignYear = el.value; return renderAssign(); },
+  'stu-filter': el => { state.stuGrade = el.value; applyStudentFilter(); },
 };
 
 document.addEventListener('click', e => {
@@ -483,6 +627,10 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
   if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
+});
+
+document.addEventListener('input', e => {
+  if (e.target.id === 'stu-q') { state.stuQuery = e.target.value; applyStudentFilter(); }
 });
 
 /* ---------- Session handling ---------- */
