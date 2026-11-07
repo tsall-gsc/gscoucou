@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GS CouCou</title>
+<title>School Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
@@ -92,6 +92,28 @@
   .badge { background: var(--ok-bg); color: var(--accent); border-radius: 99px; padding: .1rem .6rem; font-size: .85rem; font-weight: 700; }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 1.5rem; color: var(--muted); }
 
+  /* Editable students table */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .table-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+  table.grid { width: 100%; border-collapse: collapse; min-width: 46rem; }
+  .grid th { text-align: left; font-weight: 700; color: var(--muted); font-size: .95rem; padding: .6rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .grid th:nth-child(2) { width: 9rem; }
+  .grid th:nth-child(4) { width: 11rem; }
+  .grid th:nth-child(5) { width: 15rem; }
+  .grid td { padding: .2rem .3rem; border-top: 1px solid var(--line); vertical-align: middle; }
+  .grid input, .grid select { border-color: transparent; background: transparent; padding: .4rem .5rem; }
+  .grid input:hover, .grid select:hover { border-color: var(--line); }
+  .grid input:focus, .grid select:focus { border-color: var(--accent); background: #fff; }
+  .grid tr.inactive td { opacity: .65; }
+  .grid small { display: block; padding: 0 .5rem; }
+  .grid .tools { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; }
+  .state { font-size: .85rem; min-width: 4.5rem; text-align: right; }
+  .state.ok { color: var(--accent); font-weight: 700; }
+  .state.bad { color: var(--danger); }
+  .grid tr.detail td { background: var(--paper); padding: .75rem 1rem; }
+  .grid tr.detail form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+  .grid tr.detail label { flex: 1 1 10rem; }
+
   /* Fees */
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; display: grid; gap: .1rem; }
@@ -126,7 +148,7 @@
 <!-- Login screen -->
 <section id="login" hidden>
   <form class="login-box" data-form="login">
-    <h1>GS CouCou</h1>
+    <h1>School Manager</h1>
     <p class="hint">Sign in with the account your administrator created for you.</p>
     <label>Email <input type="email" name="email" autocomplete="username" required></label>
     <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
@@ -138,7 +160,7 @@
 <!-- Main app -->
 <div id="app" hidden>
   <aside>
-    <div class="brand">GS CouCou</div>
+    <div class="brand">School Manager</div>
     <nav id="nav" aria-label="Sections"></nav>
     <div class="who">
       <span id="who-name"></span>
@@ -415,39 +437,41 @@ async function renderStudents() {
   state.yearId = yearId;
   const grades = gRes.data;
   const enrOf = s => (s.enrollments || []).find(e => e.school_year_id === yearId);
-  const gradeOptions = selected => '<option value="">No grade</option>' +
-    grades.map(g => `<option value="${g.id}" ${String(g.id) === String(selected) ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
   const gradeField = selected => yearId
-    ? `<label>Grade <select name="grade_id">${gradeOptions(selected)}</select></label>` : '';
+    ? `<label>Grade <select name="grade_id"><option value="">No grade</option>${grades.map(g =>
+        `<option value="${g.id}" ${String(g.id) === String(selected) ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></label>` : '';
 
   const rows = sRes.data.map(s => {
     const e = enrOf(s);
     const gid = e ? String(e.grade_id) : '';
     const gname = e?.grades?.name || '';
-    if (state.editing === 's' + s.id) {
-      return `<li><form data-form="student-edit" data-id="${s.id}">
-        <label>Full name <input type="text" name="full_name" value="${esc(s.full_name)}" required></label>
-        ${gradeField(gid)}
-        <label>Parent or guardian <input type="text" name="guardian_name" value="${esc(s.guardian_name)}"></label>
-        <label>Parent phone <input type="tel" name="guardian_phone" value="${esc(s.guardian_phone)}"></label>
-        <label>Birth date <input type="date" name="birth_date" value="${s.birth_date ?? ''}"></label>
-        <label>Notes <input type="text" name="notes" value="${esc(s.notes)}"></label>
-        <label class="check"><input type="checkbox" name="active" ${s.active ? 'checked' : ''}> Currently enrolled</label>
-        <button class="btn primary small" type="submit">Save changes</button>
-        <button class="btn small" type="button" data-action="cancel">Cancel</button>
-      </form></li>`;
-    }
     const q = [s.full_name, s.guardian_name, s.guardian_phone, gname].filter(Boolean).join(' ').toLowerCase();
-    const contact = [s.guardian_name, s.guardian_phone].filter(Boolean).map(esc).join(' · ');
-    return `<li data-grade="${gid}" data-q="${esc(q)}">
-      <span class="grow">${esc(s.full_name)}</span>
-      ${gname ? `<span class="badge">${esc(gname)}</span>` : '<span class="meta">No grade</span>'}
-      ${s.active ? '' : '<span class="meta">Not enrolled</span>'}
-      <span class="meta">${contact}</span>
-      <span class="actions">
-        <button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Edit</button>
+    const cell = (field, value, type, label) =>
+      `<input type="${type}" data-field="${field}" data-id="${s.id}" data-orig="${esc(value)}" value="${esc(value)}" aria-label="${label} — ${esc(s.full_name)}" ${field === 'full_name' ? 'required' : ''}>`;
+    const gradeCell = yearId
+      ? `<select data-field="grade" data-id="${s.id}" data-orig="${gid}" aria-label="Grade — ${esc(s.full_name)}">
+           ${gid ? '' : '<option value="">Choose grade…</option>'}
+           ${grades.map(g => `<option value="${g.id}" ${String(g.id) === gid ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+         </select>`
+      : '<span class="meta">—</span>';
+    const main = `<tr class="${s.active ? '' : 'inactive'}" data-id="${s.id}" data-grade="${gid}" data-q="${esc(q)}">
+      <td>${cell('full_name', s.full_name, 'text', 'Full name')}${s.active ? '' : '<small class="meta">Not enrolled</small>'}</td>
+      <td>${gradeCell}</td>
+      <td>${cell('guardian_name', s.guardian_name ?? '', 'text', 'Parent or guardian')}</td>
+      <td>${cell('guardian_phone', s.guardian_phone ?? '', 'tel', 'Parent phone')}</td>
+      <td><div class="tools"><span class="state" role="status"></span>
+        <button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Details</button>
         ${isAdmin() ? `<button class="btn small danger" type="button" data-action="del-student" data-id="${s.id}" data-name="${esc(s.full_name)}">Delete</button>` : ''}
-      </span></li>`;
+      </div></td></tr>`;
+    const detail = state.editing === 's' + s.id
+      ? `<tr class="detail"><td colspan="5"><form data-form="student-details" data-id="${s.id}">
+          <label>Birth date <input type="date" name="birth_date" value="${s.birth_date ?? ''}"></label>
+          <label>Notes <input type="text" name="notes" value="${esc(s.notes)}"></label>
+          <label class="check"><input type="checkbox" name="active" ${s.active ? 'checked' : ''}> Currently enrolled</label>
+          <button class="btn primary small" type="submit">Save details</button>
+          <button class="btn small" type="button" data-action="cancel">Cancel</button>
+        </form></td></tr>` : '';
+    return main + detail;
   }).join('');
 
   const filterBar = sRes.data.length ? `
@@ -466,7 +490,7 @@ async function renderStudents() {
   $('#view').innerHTML = `
     <div style="display:grid;gap:1.25rem">
       <h2>Students</h2>
-      <p class="lead">Every student with their grade for the current school year and their parent’s contact. Anyone with an account can add and edit students.</p>
+      <p class="lead">Click any name, grade, parent or phone in the list to change it. Each change is saved as soon as you leave the field. “Details” has birth date, notes and enrollment status.</p>
       ${yearId ? '' : '<div class="empty">No school year is marked as current, so grades can’t be shown or set. Mark one in School years.</div>'}
       <form class="add" data-form="student-add">
         <label>Full name <input type="text" name="full_name" required></label>
@@ -476,17 +500,60 @@ async function renderStudents() {
         <button class="btn primary" type="submit">Add student</button>
       </form>
       ${filterBar}
-      ${sRes.data.length ? `<ul class="rows" id="stu-list">${rows}</ul>`
+      ${sRes.data.length ? `<div class="table-wrap"><table class="grid" id="stu-table">
+          <thead><tr><th>Full name</th><th>Grade</th><th>Parent or guardian</th><th>Parent phone</th><th><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody>${rows}</tbody></table></div>`
         : '<div class="empty">No students yet. Add the first one above.</div>'}
     </div>`;
   applyStudentFilter();
+}
+
+// Saves one cell of the students table as soon as the person leaves it.
+async function saveStudentField(el) {
+  const id = Number(el.dataset.id);
+  const field = el.dataset.field;
+  const row = el.closest('tr');
+  const flag = row.querySelector('.state');
+  const say = (text, cls) => { flag.textContent = text; flag.className = 'state ' + cls; };
+  const orig = el.dataset.orig;
+  const value = el.value.trim();
+
+  if (value === orig) { if (el.value !== value) el.value = value; return; }
+  if (field === 'full_name' && !value) { el.value = orig; say('Name can’t be empty', 'bad'); return; }
+  if (field === 'grade' && !value) return;           // the "Choose grade…" placeholder: nothing to save
+
+  say('Saving…', '');
+  let error;
+  if (field === 'grade') {
+    ({ error } = await db.from('enrollments').upsert(
+      { student_id: id, school_year_id: state.yearId, grade_id: Number(value) },
+      { onConflict: 'student_id,school_year_id' }));
+  } else {
+    ({ error } = await db.from('students').update({ [field]: field === 'full_name' ? value : nullIfEmpty(value) }).eq('id', id));
+  }
+  if (error) { el.value = orig; say('Not saved: ' + friendly(error), 'bad'); return; }
+
+  el.value = value;
+  el.dataset.orig = value;
+  if (field === 'grade') el.querySelector('option[value=""]')?.remove();
+
+  // Keep the search and grade filters in step with what is now on screen.
+  const gSel = row.querySelector('[data-field="grade"]');
+  const gText = gSel?.value ? gSel.selectedOptions[0].textContent : '';
+  row.dataset.grade = gSel?.value || '';
+  row.dataset.q = ['full_name', 'guardian_name', 'guardian_phone']
+    .map(f => row.querySelector(`[data-field="${f}"]`).value).concat(gText)
+    .filter(Boolean).join(' ').toLowerCase();
+
+  say('Saved ✓', 'ok');
+  setTimeout(() => { if (flag.textContent === 'Saved ✓') say('', ''); }, 2500);
 }
 
 function applyStudentFilter() {
   const g = state.stuGrade;
   const q = state.stuQuery.trim().toLowerCase();
   let shown = 0, total = 0;
-  document.querySelectorAll('#stu-list li[data-q]').forEach(li => {
+  document.querySelectorAll('#stu-table tbody tr[data-q]').forEach(li => {
     total++;
     const okGrade = !g || (g === 'none' ? li.dataset.grade === '' : li.dataset.grade === g);
     const okText = !q || li.dataset.q.includes(q);
@@ -733,24 +800,14 @@ const FORMS = {
     }
     return done(null, 'Student added.', renderStudents);
   },
-  async 'student-edit'(f, id) {
+  async 'student-details'(f, id) {
     const { error } = await db.from('students').update({
-      full_name: f.full_name.trim(),
-      guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
-      guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
       birth_date: nullIfEmpty(f.birth_date),
       notes: nullIfEmpty((f.notes || '').trim()),
       active: f.active === 'on',
     }).eq('id', id);
-    if (error) return notify(friendly(error), true);
-    if (f.grade_id && state.yearId) {
-      const enr = await db.from('enrollments').upsert(
-        { student_id: Number(id), school_year_id: state.yearId, grade_id: Number(f.grade_id) },
-        { onConflict: 'student_id,school_year_id' });
-      if (enr.error) return notify('Saved, but the grade could not be changed: ' + friendly(enr.error), true);
-    }
     state.editing = null;
-    return done(null, 'Student updated.', renderStudents);
+    return done(error, 'Details saved.', renderStudents);
   },
   async 'pay-add'(f, id, form) {
     const amount = Number(f.amount);
@@ -877,6 +934,8 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('change', e => {
+  const cellEl = e.target.closest('[data-field]');
+  if (cellEl) { saveStudentField(cellEl); return; }
   const el = e.target.closest('[data-change]');
   if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
 });
