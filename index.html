@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>School Manager</title>
+<title>GS CouCou</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
@@ -39,7 +39,7 @@
   .btn.danger { color: var(--danger); }
   .btn.small { padding: .25rem .6rem; font-size: .9rem; }
   label { display: grid; gap: .25rem; font-size: .95rem; color: var(--muted); }
-  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=tel], select {
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=tel], input[type=search], select {
     border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; background: #fff; color: var(--ink); width: 100%; font: inherit;
   }
   label.check { display: flex; align-items: center; gap: .5rem; color: var(--ink); }
@@ -92,6 +92,26 @@
   .badge { background: var(--ok-bg); color: var(--accent); border-radius: 99px; padding: .1rem .6rem; font-size: .85rem; font-weight: 700; }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 1.5rem; color: var(--muted); }
 
+  /* Fees */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; display: grid; gap: .1rem; }
+  .stat .label { color: var(--muted); font-size: .9rem; }
+  .stat b { font-size: 1.25rem; }
+  .tchips { display: flex; flex-wrap: wrap; gap: .35rem; flex: 2 1 18rem; }
+  .tchip { border-radius: 99px; padding: .1rem .65rem; font-size: .85rem; border: 1px solid transparent; }
+  .tchip.ok { background: var(--ok-bg); color: var(--accent); font-weight: 700; }
+  .tchip.part { background: #fbf0d9; color: #7a5a0a; }
+  .tchip.none { background: var(--err-bg); color: var(--danger); }
+  .bal { font-weight: 700; min-width: 9rem; }
+  .bal.owe { color: var(--danger); }
+  .panel { flex: 1 1 100%; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; display: grid; gap: .75rem; }
+  .pitem { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; padding: .35rem 0; border-top: 1px solid var(--line); }
+  .pitem:first-child { border-top: 0; }
+  .pitem .amt { font-weight: 700; min-width: 8rem; }
+  .termbox summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+  .termbox { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; }
+  .termbox form.add { margin-top: .75rem; border: 0; padding: 0; }
+
   @media (max-width: 720px) {
     #app { grid-template-columns: 1fr; }
     aside { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem; }
@@ -106,7 +126,7 @@
 <!-- Login screen -->
 <section id="login" hidden>
   <form class="login-box" data-form="login">
-    <h1>School Manager</h1>
+    <h1>GS CouCou</h1>
     <p class="hint">Sign in with the account your administrator created for you.</p>
     <label>Email <input type="email" name="email" autocomplete="username" required></label>
     <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
@@ -118,7 +138,7 @@
 <!-- Main app -->
 <div id="app" hidden>
   <aside>
-    <div class="brand">School Manager</div>
+    <div class="brand">GS CouCou</div>
     <nav id="nav" aria-label="Sections"></nav>
     <div class="who">
       <span id="who-name"></span>
@@ -142,10 +162,12 @@
 <script src="config.js"></script>
 <script>
 const $ = s => document.querySelector(s);
+const tname = t => [t?.first_name, t?.last_name].filter(Boolean).join(' ');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
 
-const state = { user: null, profile: null, view: 'grades', editing: null, assignYear: null };
+const state = { user: null, profile: null, view: 'grades', editing: null, assignYear: null, stuGrade: '', stuQuery: '', yearId: null,
+               feeYear: null, feeQuery: '', feeGrade: '', feeStatus: '', openFee: null, fee: null };
 const isAdmin = () => ['admin', 'super_admin'].includes(state.profile?.role);
 const isSuper = () => state.profile?.role === 'super_admin';
 
@@ -165,6 +187,7 @@ function friendly(error) {
   if (error.code === '23505') return 'That name already exists. Choose a different one.';
   if (error.code === '23503') return 'This item is still in use (by students, teachers or payments), so it can’t be deleted.';
   if (error.code === '42501') return 'Your role doesn’t allow this action.';
+  if (['PGRST205', 'PGRST204', '42P01', '42703'].includes(error.code)) return 'The database is missing part of the fees setup. Run fees.sql in the Supabase SQL Editor, then reload.';
   return error.message || 'Something went wrong. Try again.';
 }
 
@@ -174,8 +197,10 @@ const SECTIONS = [
   { id: 'grades', label: 'Grades',       render: renderGrades },
   { id: 'teachers', label: 'Teachers',   render: renderTeachers },
   { id: 'assign', label: 'Assign teachers', render: renderAssign },
+  { id: 'students', label: 'Students', render: renderStudents },
+  { id: 'fees', label: 'Fees', render: renderFees },
 ];
-const COMING = ['Students', 'Expenses', 'Fees'];
+const COMING = ['Expenses'];
 
 function renderNav() {
   $('#nav').innerHTML =
@@ -264,7 +289,7 @@ async function renderYears() {
 /* ---------- Teachers ---------- */
 async function renderTeachers() {
   const [tRes, yRes] = await Promise.all([
-    db.from('teachers').select('*, teacher_assignments(school_year_id, grades(name, sort_order))').order('full_name'),
+    db.from('teachers').select('*, teacher_assignments(school_year_id, grades(name, sort_order))').order('last_name').order('first_name'),
     db.from('school_years').select('id, label').eq('is_current', true).maybeSingle(),
   ]);
   if (tRes.error) return notify(friendly(tRes.error), true);
@@ -277,7 +302,8 @@ async function renderTeachers() {
   const rows = tRes.data.map(t => {
     if (state.editing === 't' + t.id) {
       return `<li><form data-form="teacher-edit" data-id="${t.id}">
-        <label>Full name <input type="text" name="full_name" value="${esc(t.full_name)}" required></label>
+        <label>First name <input type="text" name="first_name" value="${esc(t.first_name)}" required></label>
+        <label>Last name <input type="text" name="last_name" value="${esc(t.last_name)}" required></label>
         <label>Phone <input type="tel" name="phone" value="${esc(t.phone)}"></label>
         <label>Email <input type="email" name="email" value="${esc(t.email)}"></label>
         <label class="check"><input type="checkbox" name="active" ${t.active ? 'checked' : ''}> Currently teaching</label>
@@ -286,13 +312,13 @@ async function renderTeachers() {
       </form></li>`;
     }
     const classes = classesOf(t);
-    return `<li><span class="grow">${esc(t.full_name)}</span>
+    return `<li><span class="grow">${esc(tname(t))}</span>
       ${t.active ? '' : '<span class="meta">Not teaching</span>'}
       <span class="meta">${classes ? 'Class ' + esc(classes) : 'No class this year'}</span>
       <span class="meta">${esc(t.phone || '')}${t.email ? ' · ' + esc(t.email) : ''}</span>
       <span class="actions">
         ${isAdmin() ? `<button class="btn small" type="button" data-action="edit" data-key="t${t.id}">Edit</button>` : ''}
-        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(t.full_name)}">Delete</button>` : ''}
+        ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-teacher" data-id="${t.id}" data-name="${esc(tname(t))}">Delete</button>` : ''}
       </span></li>`;
   }).join('');
 
@@ -301,7 +327,8 @@ async function renderTeachers() {
       <h2>Teachers</h2>
       <p class="lead">Everyone who teaches at the school. The class shown is for the current school year. Use Assign teachers to change it.</p>
       ${isAdmin() ? `<form class="add" data-form="teacher-add">
-          <label>Full name <input type="text" name="full_name" required></label>
+          <label>First name <input type="text" name="first_name" required></label>
+          <label>Last name <input type="text" name="last_name" required></label>
           <label>Phone <input type="tel" name="phone"></label>
           <label>Email <input type="email" name="email"></label>
           <button class="btn primary" type="submit">Add teacher</button>
@@ -316,7 +343,7 @@ async function renderAssign() {
   const [yRes, gRes, tRes] = await Promise.all([
     db.from('school_years').select('id, label, is_current').order('label', { ascending: false }),
     db.from('grades').select('id, name').order('sort_order').order('name'),
-    db.from('teachers').select('id, full_name').eq('active', true).order('full_name'),
+    db.from('teachers').select('id, first_name, last_name').eq('active', true).order('last_name').order('first_name'),
   ]);
   const err = yRes.error || gRes.error || tRes.error;
   if (err) return notify(friendly(err), true);
@@ -332,7 +359,7 @@ async function renderAssign() {
   state.assignYear = yearId;
 
   const aRes = await db.from('teacher_assignments')
-    .select('id, grade_id, teacher_id, teachers(full_name)').eq('school_year_id', yearId);
+    .select('id, grade_id, teacher_id, teachers(first_name, last_name)').eq('school_year_id', yearId);
   if (aRes.error) return notify(friendly(aRes.error), true);
 
   const byGrade = {};
@@ -342,15 +369,15 @@ async function renderAssign() {
     const list = byGrade[g.id] || [];
     const taken = new Set(list.map(a => a.teacher_id));
     const options = tRes.data.filter(t => !taken.has(t.id));
-    const chips = list.map(a => `<span class="chip">${esc(a.teachers?.full_name)}${isAdmin()
-      ? `<button type="button" class="chip-x" data-action="unassign" data-id="${a.id}" aria-label="Remove ${esc(a.teachers?.full_name)} from ${esc(g.name)}">×</button>` : ''}</span>`).join('');
+    const chips = list.map(a => `<span class="chip">${esc(tname(a.teachers))}${isAdmin()
+      ? `<button type="button" class="chip-x" data-action="unassign" data-id="${a.id}" aria-label="Remove ${esc(tname(a.teachers))} from ${esc(g.name)}">×</button>` : ''}</span>`).join('');
     const picker = isAdmin() && options.length
       ? `<form class="pick" data-form="assign-add">
            <input type="hidden" name="grade_id" value="${g.id}">
            <input type="hidden" name="year_id" value="${yearId}">
            <select name="teacher_id" required aria-label="Add a teacher to ${esc(g.name)}">
              <option value="">Add a teacher…</option>
-             ${options.map(t => `<option value="${t.id}">${esc(t.full_name)}</option>`).join('')}
+             ${options.map(t => `<option value="${t.id}">${esc(tname(t))}</option>`).join('')}
            </select>
            <button class="btn small primary" type="submit">Assign</button>
          </form>` : '';
@@ -370,6 +397,275 @@ async function renderAssign() {
       ${gRes.data.length ? `<ul class="rows">${rows}</ul>`
         : `<div class="empty">No grades yet. Add them in the Grades section first.</div>`}
     </div>`;
+}
+
+/* ---------- Students ---------- */
+async function renderStudents() {
+  const [sRes, yRes, gRes] = await Promise.all([
+    db.from('students')
+      .select('*, enrollments(id, school_year_id, grade_id, grades(name, sort_order))')
+      .order('full_name').limit(5000),
+    db.from('school_years').select('id, label').eq('is_current', true).maybeSingle(),
+    db.from('grades').select('id, name').order('sort_order').order('name'),
+  ]);
+  const err = sRes.error || gRes.error;
+  if (err) return notify(friendly(err), true);
+
+  const yearId = yRes.data?.id ?? null;
+  state.yearId = yearId;
+  const grades = gRes.data;
+  const enrOf = s => (s.enrollments || []).find(e => e.school_year_id === yearId);
+  const gradeOptions = selected => '<option value="">No grade</option>' +
+    grades.map(g => `<option value="${g.id}" ${String(g.id) === String(selected) ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
+  const gradeField = selected => yearId
+    ? `<label>Grade <select name="grade_id">${gradeOptions(selected)}</select></label>` : '';
+
+  const rows = sRes.data.map(s => {
+    const e = enrOf(s);
+    const gid = e ? String(e.grade_id) : '';
+    const gname = e?.grades?.name || '';
+    if (state.editing === 's' + s.id) {
+      return `<li><form data-form="student-edit" data-id="${s.id}">
+        <label>Full name <input type="text" name="full_name" value="${esc(s.full_name)}" required></label>
+        ${gradeField(gid)}
+        <label>Parent or guardian <input type="text" name="guardian_name" value="${esc(s.guardian_name)}"></label>
+        <label>Parent phone <input type="tel" name="guardian_phone" value="${esc(s.guardian_phone)}"></label>
+        <label>Birth date <input type="date" name="birth_date" value="${s.birth_date ?? ''}"></label>
+        <label>Notes <input type="text" name="notes" value="${esc(s.notes)}"></label>
+        <label class="check"><input type="checkbox" name="active" ${s.active ? 'checked' : ''}> Currently enrolled</label>
+        <button class="btn primary small" type="submit">Save changes</button>
+        <button class="btn small" type="button" data-action="cancel">Cancel</button>
+      </form></li>`;
+    }
+    const q = [s.full_name, s.guardian_name, s.guardian_phone, gname].filter(Boolean).join(' ').toLowerCase();
+    const contact = [s.guardian_name, s.guardian_phone].filter(Boolean).map(esc).join(' · ');
+    return `<li data-grade="${gid}" data-q="${esc(q)}">
+      <span class="grow">${esc(s.full_name)}</span>
+      ${gname ? `<span class="badge">${esc(gname)}</span>` : '<span class="meta">No grade</span>'}
+      ${s.active ? '' : '<span class="meta">Not enrolled</span>'}
+      <span class="meta">${contact}</span>
+      <span class="actions">
+        <button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Edit</button>
+        ${isAdmin() ? `<button class="btn small danger" type="button" data-action="del-student" data-id="${s.id}" data-name="${esc(s.full_name)}">Delete</button>` : ''}
+      </span></li>`;
+  }).join('');
+
+  const filterBar = sRes.data.length ? `
+    <div class="add">
+      <label>Search <input type="search" id="stu-q" placeholder="Name, parent or phone" value="${esc(state.stuQuery)}"></label>
+      <label>Grade
+        <select data-change="stu-filter">
+          <option value="">All grades</option>
+          ${grades.map(g => `<option value="${g.id}" ${String(g.id) === state.stuGrade ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+          <option value="none" ${state.stuGrade === 'none' ? 'selected' : ''}>No grade</option>
+        </select>
+      </label>
+      <span class="meta" id="stu-count" role="status"></span>
+    </div>` : '';
+
+  $('#view').innerHTML = `
+    <div style="display:grid;gap:1.25rem">
+      <h2>Students</h2>
+      <p class="lead">Every student with their grade for the current school year and their parent’s contact. Anyone with an account can add and edit students.</p>
+      ${yearId ? '' : '<div class="empty">No school year is marked as current, so grades can’t be shown or set. Mark one in School years.</div>'}
+      <form class="add" data-form="student-add">
+        <label>Full name <input type="text" name="full_name" required></label>
+        ${gradeField('')}
+        <label>Parent or guardian <input type="text" name="guardian_name"></label>
+        <label>Parent phone <input type="tel" name="guardian_phone"></label>
+        <button class="btn primary" type="submit">Add student</button>
+      </form>
+      ${filterBar}
+      ${sRes.data.length ? `<ul class="rows" id="stu-list">${rows}</ul>`
+        : '<div class="empty">No students yet. Add the first one above.</div>'}
+    </div>`;
+  applyStudentFilter();
+}
+
+function applyStudentFilter() {
+  const g = state.stuGrade;
+  const q = state.stuQuery.trim().toLowerCase();
+  let shown = 0, total = 0;
+  document.querySelectorAll('#stu-list li[data-q]').forEach(li => {
+    total++;
+    const okGrade = !g || (g === 'none' ? li.dataset.grade === '' : li.dataset.grade === g);
+    const okText = !q || li.dataset.q.includes(q);
+    li.hidden = !(okGrade && okText);
+    if (!li.hidden) shown++;
+  });
+  const c = $('#stu-count');
+  if (c) c.textContent = `${shown} of ${total} students`;
+}
+
+/* ---------- Fees ---------- */
+const money = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const todayLocal = () => new Date().toLocaleDateString('en-CA');
+const METHODS = ['Cash', 'Bank transfer', 'Mobile money'];
+const shortTerm = t => t.name.split(' (')[0];
+
+async function renderFees() {
+  const yRes = await db.from('school_years').select('id, label, is_current').order('label', { ascending: false });
+  if (yRes.error) return notify(friendly(yRes.error), true);
+  const years = yRes.data;
+  if (!years.length) {
+    state.fee = null;
+    $('#view').innerHTML = `<div style="display:grid;gap:1.25rem"><h2>Fees</h2>
+      <div class="empty">Add a school year first, in the School years section.</div></div>`;
+    return;
+  }
+  const yearId = years.find(y => String(y.id) === String(state.feeYear))?.id
+    ?? years.find(y => y.is_current)?.id ?? years[0].id;
+  state.feeYear = yearId;
+
+  const [tRes, eRes, gRes] = await Promise.all([
+    db.from('fee_terms').select('*').eq('school_year_id', yearId).order('sort_order').order('id'),
+    db.from('enrollments')
+      .select('id, grade_id, grades(name), students(id, full_name, active), payments(id, term_id, amount, paid_on, method, note)')
+      .eq('school_year_id', yearId).limit(5000),
+    db.from('grades').select('id, name').order('sort_order').order('name'),
+  ]);
+  const err = tRes.error || eRes.error || gRes.error;
+  if (err) return notify(friendly(err), true);
+
+  const terms = tRes.data;
+  const due = terms.reduce((a, t) => a + Number(t.amount), 0);
+  const rows = eRes.data
+    .filter(e => e.students)
+    .map(e => {
+      const pays = (e.payments || []).slice().sort((a, b) => (a.paid_on < b.paid_on ? 1 : a.paid_on > b.paid_on ? -1 : b.id - a.id));
+      const paidBy = {};
+      pays.forEach(p => { paidBy[p.term_id] = (paidBy[p.term_id] || 0) + Number(p.amount); });
+      const paid = pays.reduce((a, p) => a + Number(p.amount), 0);
+      return { e, s: e.students, g: e.grades?.name || '', pays, paidBy, paid, balance: due - paid };
+    })
+    .sort((a, b) => a.s.full_name.localeCompare(b.s.full_name));
+
+  state.fee = { years, yearId, yearLabel: years.find(y => y.id === yearId).label, terms, grades: gRes.data, rows, due };
+  drawFees();
+}
+
+function drawFees() {
+  const f = state.fee;
+  if (!f) return;
+  const { years, yearId, terms, grades, rows, due } = f;
+
+  const yearPicker = `<label class="year-pick">School year
+    <select data-change="fee-year">
+      ${years.map(y => `<option value="${y.id}" ${y.id === yearId ? 'selected' : ''}>${esc(y.label)}${y.is_current ? ' (current)' : ''}</option>`).join('')}
+    </select></label>`;
+  const head = `<h2>Fees</h2>
+    <p class="lead">Record what each family pays, term by term, and see who still owes.</p>${yearPicker}`;
+
+  if (!terms.length) {
+    $('#view').innerHTML = `<div style="display:grid;gap:1.25rem">${head}
+      <div class="empty">No fee terms are set up for this school year.
+      ${isAdmin() ? `<p style="margin-top:.75rem"><button class="btn primary" type="button" data-action="make-terms" data-year="${yearId}">Create the 3 standard terms</button></p>
+        <p class="meta" style="margin-top:.5rem">Quarter 1 (Oct–Dec) 800,000 GNF · Quarter 2 (Jan–Mar) 350,000 GNF · Quarter 3 (Apr–Jun) 50,000 GNF</p>`
+        : '<p style="margin-top:.5rem">An admin needs to set them up.</p>'}</div></div>`;
+    return;
+  }
+
+  // Summary
+  const expected = due * rows.length;
+  const collected = rows.reduce((a, r) => a + r.paid, 0);
+  const owingCount = rows.filter(r => r.balance > 0).length;
+  const pct = expected ? Math.round(collected / expected * 100) : 0;
+  const stats = `<div class="stats">
+      <div class="stat"><span class="label">Collected</span><b>${money(collected)} GNF</b><span class="meta">of ${money(expected)} GNF (${pct}%)</span></div>
+      <div class="stat"><span class="label">Still to collect</span><b>${money(Math.max(expected - collected, 0))} GNF</b><span class="meta">${owingCount} of ${rows.length} students owe</span></div>
+      ${terms.map(t => {
+        const got = rows.reduce((a, r) => a + (r.paidBy[t.id] || 0), 0);
+        return `<div class="stat"><span class="label">${esc(t.name)}</span><b>${money(got)} GNF</b><span class="meta">of ${money(Number(t.amount) * rows.length)} · ${money(t.amount)} each</span></div>`;
+      }).join('')}
+    </div>`;
+
+  const termEditor = isAdmin() ? `<details class="termbox"><summary>Change fee amounts</summary>
+      <form data-form="terms-save" class="add">
+        ${terms.map(t => `<label>Term name <input type="text" name="name_${t.id}" value="${esc(t.name)}" required></label>
+          <label>Amount (GNF) <input type="number" name="amount_${t.id}" min="0" step="1" value="${Number(t.amount)}" required></label>`).join('')}
+        <button class="btn primary" type="submit">Save amounts</button>
+        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that term.</p>
+      </form></details>` : '';
+
+  // Student rows
+  const rowHtml = r => {
+    const chips = terms.map(t => {
+      const left = Number(t.amount) - (r.paidBy[t.id] || 0);
+      const cls = left <= 0 ? 'ok' : (r.paidBy[t.id] ? 'part' : 'none');
+      return `<span class="tchip ${cls}" title="${esc(t.name)}">${esc(shortTerm(t))} ${left <= 0 ? '✓' : '· ' + money(left)}</span>`;
+    }).join('');
+    const balText = r.balance > 0 ? 'Owes ' + money(r.balance) + ' GNF' : r.balance < 0 ? 'Overpaid ' + money(-r.balance) + ' GNF' : 'Paid up';
+    const q = [r.s.full_name, r.g].join(' ').toLowerCase();
+    const isOpen = state.openFee === r.e.id;
+
+    let panel = '';
+    if (isOpen) {
+      const firstOpenTerm = terms.find(t => Number(t.amount) - (r.paidBy[t.id] || 0) > 0) || terms[0];
+      const defaultLeft = Math.max(Number(firstOpenTerm.amount) - (r.paidBy[firstOpenTerm.id] || 0), 0);
+      const termName = id => esc(terms.find(t => t.id === id)?.name || 'No term');
+      panel = `<div class="panel">
+        <div>${r.pays.length ? r.pays.map(p => `<div class="pitem">
+            <span class="amt">${money(p.amount)} GNF</span>
+            <span>${termName(p.term_id)}</span>
+            <span class="meta">${esc(p.paid_on)}${p.method ? ' · ' + esc(p.method) : ''}${p.note ? ' · ' + esc(p.note) : ''}</span>
+            ${isAdmin() ? `<span class="actions"><button class="btn small danger" type="button" data-action="del-payment" data-id="${p.id}">Delete</button></span>` : ''}
+          </div>`).join('') : '<p class="meta">No payments yet.</p>'}</div>
+        <form data-form="pay-add" data-id="${r.e.id}">
+          <label>Term <select name="term_id" data-change="pay-term" required>
+            ${terms.map(t => { const left = Math.max(Number(t.amount) - (r.paidBy[t.id] || 0), 0);
+              return `<option value="${t.id}" data-remaining="${left}" ${t.id === firstOpenTerm.id ? 'selected' : ''}>${esc(t.name)} — ${left > 0 ? money(left) + ' left' : 'paid'}</option>`; }).join('')}
+          </select></label>
+          <label>Amount (GNF) <input type="number" name="amount" min="1" step="1" value="${defaultLeft || ''}" required></label>
+          <label>Date <input type="date" name="paid_on" value="${todayLocal()}" required></label>
+          <label>Method <select name="method">${METHODS.map(m => `<option>${m}</option>`).join('')}</select></label>
+          <label>Note <input type="text" name="note" placeholder="Optional"></label>
+          <button class="btn primary small" type="submit">Record payment</button>
+        </form></div>`;
+    }
+
+    return `<li id="fee-${r.e.id}" data-grade="${r.e.grade_id ?? ''}" data-status="${r.balance > 0 ? 'owing' : 'paid'}"
+        data-owed="${Math.max(r.balance, 0)}" data-q="${esc(q)}">
+      <span class="grow">${esc(r.s.full_name)}</span>
+      ${r.g ? `<span class="badge">${esc(r.g)}</span>` : '<span class="meta">No grade</span>'}
+      <span class="tchips">${chips}</span>
+      <span class="bal ${r.balance > 0 ? 'owe' : ''}">${balText}</span>
+      <span class="actions"><button class="btn small ${isOpen ? '' : 'primary'}" type="button" data-action="open-fee" data-id="${r.e.id}">${isOpen ? 'Close' : 'Payments'}</button></span>
+      ${panel}</li>`;
+  };
+
+  const filterBar = rows.length ? `<div class="add">
+      <label>Search <input type="search" id="fee-q" placeholder="Student name" value="${esc(state.feeQuery)}"></label>
+      <label>Grade <select data-change="fee-filter" data-key="feeGrade">
+        <option value="">All grades</option>
+        ${grades.map(g => `<option value="${g.id}" ${String(g.id) === state.feeGrade ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+      </select></label>
+      <label>Status <select data-change="fee-filter" data-key="feeStatus">
+        <option value="">Everyone</option>
+        <option value="owing" ${state.feeStatus === 'owing' ? 'selected' : ''}>Still owing</option>
+        <option value="paid" ${state.feeStatus === 'paid' ? 'selected' : ''}>Paid up</option>
+      </select></label>
+      <span class="meta" id="fee-count" role="status"></span>
+      ${isAdmin() ? '<button class="btn small" type="button" data-action="export-fees">Download as spreadsheet (CSV)</button>' : ''}
+    </div>` : '';
+
+  $('#view').innerHTML = `<div style="display:grid;gap:1.25rem">${head}${stats}${termEditor}${filterBar}
+    ${rows.length ? `<ul class="rows" id="fee-list">${rows.map(rowHtml).join('')}</ul>`
+      : '<div class="empty">No students are enrolled for this school year yet.</div>'}</div>`;
+  applyFeeFilter();
+  if (state.openFee) $('#fee-' + state.openFee)?.scrollIntoView({ block: 'nearest' });
+}
+
+function applyFeeFilter() {
+  const g = state.feeGrade, st = state.feeStatus, q = state.feeQuery.trim().toLowerCase();
+  let shown = 0, total = 0, owed = 0;
+  document.querySelectorAll('#fee-list li[data-q]').forEach(li => {
+    total++;
+    const ok = (!g || li.dataset.grade === g) && (!st || li.dataset.status === st) && (!q || li.dataset.q.includes(q));
+    li.hidden = !ok;
+    if (ok) { shown++; owed += Number(li.dataset.owed); }
+  });
+  const c = $('#fee-count');
+  if (c) c.textContent = `${shown} of ${total} students · ${money(owed)} GNF outstanding`;
 }
 
 /* ---------- Form submissions ---------- */
@@ -401,13 +697,13 @@ const FORMS = {
   },
   async 'teacher-add'(f) {
     const { error } = await db.from('teachers').insert({
-      full_name: f.full_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
+      first_name: f.first_name.trim(), last_name: f.last_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
     });
     return done(error, 'Teacher added.', renderTeachers);
   },
   async 'teacher-edit'(f, id) {
     const { error } = await db.from('teachers').update({
-      full_name: f.full_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
+      first_name: f.first_name.trim(), last_name: f.last_name.trim(), phone: nullIfEmpty(f.phone.trim()), email: nullIfEmpty(f.email.trim()),
       active: f.active === 'on',
     }).eq('id', id);
     state.editing = null;
@@ -418,6 +714,63 @@ const FORMS = {
       teacher_id: Number(f.teacher_id), grade_id: Number(f.grade_id), school_year_id: Number(f.year_id),
     });
     return done(error, 'Teacher assigned.', renderAssign);
+  },
+  async 'student-add'(f) {
+    const { data, error } = await db.from('students').insert({
+      full_name: f.full_name.trim(),
+      guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
+      guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
+    }).select('id').single();
+    if (error) return notify(friendly(error), true);
+    if (f.grade_id && state.yearId) {
+      const enr = await db.from('enrollments').insert({
+        student_id: data.id, school_year_id: state.yearId, grade_id: Number(f.grade_id),
+      });
+      if (enr.error) {
+        await renderStudents();
+        return notify('Student added, but the grade could not be set: ' + friendly(enr.error), true);
+      }
+    }
+    return done(null, 'Student added.', renderStudents);
+  },
+  async 'student-edit'(f, id) {
+    const { error } = await db.from('students').update({
+      full_name: f.full_name.trim(),
+      guardian_name: nullIfEmpty((f.guardian_name || '').trim()),
+      guardian_phone: nullIfEmpty((f.guardian_phone || '').trim()),
+      birth_date: nullIfEmpty(f.birth_date),
+      notes: nullIfEmpty((f.notes || '').trim()),
+      active: f.active === 'on',
+    }).eq('id', id);
+    if (error) return notify(friendly(error), true);
+    if (f.grade_id && state.yearId) {
+      const enr = await db.from('enrollments').upsert(
+        { student_id: Number(id), school_year_id: state.yearId, grade_id: Number(f.grade_id) },
+        { onConflict: 'student_id,school_year_id' });
+      if (enr.error) return notify('Saved, but the grade could not be changed: ' + friendly(enr.error), true);
+    }
+    state.editing = null;
+    return done(null, 'Student updated.', renderStudents);
+  },
+  async 'pay-add'(f, id, form) {
+    const amount = Number(f.amount);
+    if (!(amount > 0)) return notify('Enter an amount greater than zero.', true);
+    const left = Number(form.elements.term_id.selectedOptions[0]?.dataset.remaining ?? 0);
+    if (amount > left && !confirm(`This is more than what is left for this term (${money(left)} GNF). Record it anyway?`)) return;
+    const { error } = await db.from('payments').insert({
+      enrollment_id: Number(id), term_id: Number(f.term_id), amount,
+      paid_on: f.paid_on, method: nullIfEmpty(f.method), note: nullIfEmpty((f.note || '').trim()),
+    });
+    return done(error, 'Payment recorded.', renderFees);
+  },
+  async 'terms-save'(f) {
+    const ids = Object.keys(f).map(k => k.match(/^amount_(\d+)$/)).filter(Boolean).map(m => m[1]);
+    for (const id of ids) {
+      const { error } = await db.from('fee_terms')
+        .update({ name: f['name_' + id].trim(), amount: Number(f['amount_' + id]) }).eq('id', id);
+      if (error) return notify(friendly(error), true);
+    }
+    return done(null, 'Fee terms updated.', renderFees);
   },
 };
 
@@ -432,7 +785,7 @@ document.addEventListener('submit', async e => {
   if (!form) return;
   e.preventDefault();
   const handler = FORMS[form.dataset.form];
-  if (handler) await handler(Object.fromEntries(new FormData(form)), form.dataset.id);
+  if (handler) await handler(Object.fromEntries(new FormData(form)), form.dataset.id, form);
 });
 
 /* ---------- Button actions ---------- */
@@ -466,10 +819,56 @@ const ACTIONS = {
     const { error } = await db.from('teacher_assignments').delete().eq('id', b.dataset.id);
     return done(error, 'Teacher removed from the class.', renderAssign);
   },
+  async 'del-student'(b) {
+    if (!confirm(`Delete ${b.dataset.name}? This also removes their enrollments and fee payments, and can’t be undone. To keep the history, edit the student and untick “Currently enrolled” instead.`)) return;
+    const { error } = await db.from('students').delete().eq('id', b.dataset.id);
+    return done(error, 'Student deleted.', renderStudents);
+  },
+  'open-fee'(b) {
+    const id = Number(b.dataset.id);
+    state.openFee = state.openFee === id ? null : id;
+    drawFees();
+  },
+  async 'del-payment'(b) {
+    if (!confirm('Delete this payment? This can’t be undone.')) return;
+    const { error } = await db.from('payments').delete().eq('id', b.dataset.id);
+    return done(error, 'Payment deleted.', renderFees);
+  },
+  async 'make-terms'(b) {
+    const y = Number(b.dataset.year);
+    const { error } = await db.from('fee_terms').insert([
+      { school_year_id: y, name: 'Quarter 1 (Oct–Dec)', amount: 800000, sort_order: 1 },
+      { school_year_id: y, name: 'Quarter 2 (Jan–Mar)', amount: 350000, sort_order: 2 },
+      { school_year_id: y, name: 'Quarter 3 (Apr–Jun)', amount: 50000, sort_order: 3 },
+    ]);
+    return done(error, 'Fee terms created.', renderFees);
+  },
+  'export-fees'() {
+    const f = state.fee;
+    if (!f) return;
+    const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const head = ['Student', 'Grade', ...f.terms.map(t => t.name + ' paid'), 'Total due', 'Total paid', 'Balance'];
+    const lines = f.rows.map(r => [r.s.full_name, r.g, ...f.terms.map(t => r.paidBy[t.id] || 0), f.due, r.paid, r.balance]);
+    const csv = '\ufeff' + [head, ...lines].map(l => l.map(q).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `fees-${f.yearLabel}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  },
 };
 
 const CHANGES = {
   year: el => { state.assignYear = el.value; return renderAssign(); },
+  'stu-filter': el => { state.stuGrade = el.value; applyStudentFilter(); },
+  'fee-year': el => { state.feeYear = el.value; state.openFee = null; return renderFees(); },
+  'fee-filter': el => { state[el.dataset.key] = el.value; applyFeeFilter(); },
+  'pay-term': el => {
+    const amt = el.form?.elements.amount;
+    const opt = el.selectedOptions[0];
+    if (amt && opt) amt.value = Number(opt.dataset.remaining) > 0 ? opt.dataset.remaining : '';
+  },
 };
 
 document.addEventListener('click', e => {
@@ -480,6 +879,11 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
   if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
+});
+
+document.addEventListener('input', e => {
+  if (e.target.id === 'stu-q') { state.stuQuery = e.target.value; applyStudentFilter(); }
+  if (e.target.id === 'fee-q') { state.feeQuery = e.target.value; applyFeeFilter(); }
 });
 
 /* ---------- Session handling ---------- */
