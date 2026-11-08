@@ -93,6 +93,39 @@
   .badge { background: var(--ok-bg); color: var(--accent); border-radius: 99px; padding: .1rem .6rem; font-size: .85rem; font-weight: 700; }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 1.5rem; color: var(--muted); }
 
+  /* Reports and expenses */
+  h3 { font-size: 1.15rem; line-height: 1.2; margin: 0; }
+  .repsec { display: grid; gap: .6rem; }
+  .rt-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+  table.rt { width: 100%; border-collapse: collapse; min-width: 30rem; }
+  .rt th, .rt td { padding: .55rem .75rem; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .rt thead th { border-top: 0; color: var(--muted); font-size: .9rem; }
+  .rt th:first-child, .rt td:first-child, .rt th.l, .rt td.l { text-align: left; }
+  .rt td.wrap { white-space: normal; }
+  .rt tfoot td { font-weight: 700; background: var(--paper); }
+  .rt td.pos, b.pos { color: var(--accent); }
+  .rt td.neg, b.neg { color: var(--danger); }
+  .mbars { display: flex; flex-direction: column; gap: 2px; margin-top: .3rem; min-width: 7rem; }
+  .mbar { display: block; height: 6px; border-radius: 3px; min-width: 2px; }
+  .mbar.c, .key.c { background: var(--accent); }
+  .mbar.s, .key.s { background: #d9a441; }
+  .legend { color: var(--muted); font-size: .9rem; }
+  .key { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; vertical-align: middle; }
+  #exp-table { min-width: 54rem; }
+  #exp-table th:nth-child(1) { width: 10rem; }
+  #exp-table th:nth-child(2) { width: 12rem; }
+  #exp-table th:nth-child(4) { width: 10rem; }
+  #exp-table th:nth-child(5) { width: 7rem; }
+  #exp-table td:nth-child(4) input { text-align: right; }
+  @media print {
+    aside, .noprint, #msg { display: none !important; }
+    #app { display: block; }
+    body { background: #fff; }
+    main { padding: 0; max-width: none; }
+    .rt-wrap { border: 0; overflow: visible; }
+    .stat, .repsec { break-inside: avoid; }
+  }
+
   /* Editable students table */
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .table-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
@@ -225,6 +258,17 @@
     #fee-table .termstart { border-left: 0; grid-column-start: 1; }
     .grid td.pay { padding: .45rem; border-radius: 8px; border: 1px solid var(--line); }
     .grid td.pay.ok { border-color: transparent; }
+
+    table.rt { min-width: 0; font-size: .88rem; }
+    .rt th, .rt td { padding: .5rem .4rem; }
+    .mbars { min-width: 0; }
+    .hide-sm { display: none; }
+    #exp-table { min-width: 0; }
+    #exp-table td[data-label="Amount (GNF)"] { order: 2; }
+    #exp-table td[data-label="Category"] { order: 3; grid-column: 1 / -1; }
+    #exp-table td[data-label="Description"] { order: 4; }
+    #exp-table td.tools-cell { order: 9; }
+    #exp-table td:nth-child(4) input { text-align: left; }
   }
 </style>
 </head>
@@ -274,7 +318,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
 
 const state = { user: null, profile: null, view: 'grades', editing: null, assignYear: null, stuGrade: '', stuQuery: '', yearId: null,
-               feeYear: null, feeQuery: '', feeGrade: '', feeStatus: '', openFee: null, fee: null };
+               feeYear: null, feeQuery: '', feeGrade: '', feeStatus: '', openFee: null, fee: null,
+               expYear: null, expQuery: '', expCat: '', exp: null, repYear: null, repGrade: '', rep: null };
 const isAdmin = () => ['admin', 'super_admin'].includes(state.profile?.role);
 const isSuper = () => state.profile?.role === 'super_admin';
 
@@ -294,35 +339,39 @@ function friendly(error) {
   if (error.code === '23505') return 'That name already exists. Choose a different one.';
   if (error.code === '23503') return 'This item is still in use (by students, teachers or payments), so it can’t be deleted.';
   if (error.code === '42501') return 'Your role doesn’t allow this action.';
-  if (['PGRST205', 'PGRST204', '42P01', '42703'].includes(error.code)) return 'The database is missing part of the fees setup. Run fees.sql and installments.sql in the Supabase SQL Editor, then reload.';
+  if (['PGRST205', 'PGRST204', '42P01', '42703'].includes(error.code)) return 'The database is missing something this screen needs. Run the SQL files that came with the update (fees.sql, installments.sql, expenses.sql) in the Supabase SQL Editor, then reload.';
   return error.message || 'Something went wrong. Try again.';
 }
 
 /* ---------- Sections ---------- */
 const SECTIONS = [
-  { id: 'years',  label: 'School years', render: renderYears },
-  { id: 'grades', label: 'Grades',       render: renderGrades },
-  { id: 'teachers', label: 'Teachers',   render: renderTeachers },
-  { id: 'assign', label: 'Assign teachers', render: renderAssign },
-  { id: 'students', label: 'Students', render: renderStudents },
-  { id: 'fees', label: 'Fees', render: renderFees },
+  { id: 'years',    group: 'Set up', label: 'School years',    render: renderYears },
+  { id: 'grades',   group: 'Set up', label: 'Grades',          render: renderGrades },
+  { id: 'teachers', group: 'Set up', label: 'Teachers',        render: renderTeachers },
+  { id: 'assign',   group: 'Set up', label: 'Assign teachers', render: renderAssign },
+  { id: 'students', group: 'Set up', label: 'Students',        render: renderStudents },
+  { id: 'fees',     group: 'Money',  label: 'Fees',            render: renderFees },
+  { id: 'expenses', group: 'Money',  label: 'Expenses',        render: renderExpenses, admin: true },
+  { id: 'reports',  group: 'Money',  label: 'Reports',         render: renderReports,  admin: true },
 ];
-const COMING = ['Expenses'];
+const visibleSections = () => SECTIONS.filter(s => !s.admin || isAdmin());
 
 function renderNav() {
-  $('#nav').innerHTML =
-    '<span class="group">Set up</span>' +
-    SECTIONS.map(s => `<button type="button" data-action="go" data-id="${s.id}" ${state.view === s.id ? 'aria-current="page"' : ''}>${esc(s.label)}</button>`).join('') +
-    '<span class="group">Coming next</span>' +
-    COMING.map(c => `<button type="button" disabled>${esc(c)}</button>`).join('');
+  let last = '';
+  $('#nav').innerHTML = visibleSections().map(s => {
+    const head = s.group !== last ? `<span class="group">${esc(s.group)}</span>` : '';
+    last = s.group;
+    return head + `<button type="button" data-action="go" data-id="${s.id}" ${state.view === s.id ? 'aria-current="page"' : ''}>${esc(s.label)}</button>`;
+  }).join('');
   document.querySelector('#nav [aria-current="page"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
 async function show(id) {
-  state.view = id;
+  const sec = visibleSections().find(s => s.id === id) || visibleSections()[1];   // admin-only sections fall back to Grades
+  state.view = sec.id;
   state.editing = null;
   renderNav();
-  await SECTIONS.find(s => s.id === id).render();
+  await sec.render();
 }
 
 /* ---------- Grades ---------- */
@@ -1053,6 +1102,360 @@ function applyFeeFilter() {
   if (c) c.textContent = `${shown} of ${total} students · ${money(owed)} GNF outstanding`;
 }
 
+/* ---------- Expenses (admins only) ---------- */
+const EXPENSE_CATEGORIES = ['Salaries', 'Rent', 'Electricity & water', 'Supplies', 'Maintenance', 'Transport', 'Events', 'Other'];
+
+function downloadCsv(name, table) {
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '\ufeff' + table.map(l => l.map(q).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+async function renderExpenses() {
+  const yRes = await db.from('school_years').select('id, label, is_current').order('label', { ascending: false });
+  if (yRes.error) return notify(friendly(yRes.error), true);
+  const years = yRes.data;
+  if (!years.length) {
+    state.exp = null;
+    $('#view').innerHTML = `<div style="display:grid;gap:1.25rem"><h2>Expenses</h2>
+      <div class="empty">Add a school year first, in the School years section.</div></div>`;
+    return;
+  }
+  const yearId = years.find(y => String(y.id) === String(state.expYear))?.id
+    ?? years.find(y => y.is_current)?.id ?? years[0].id;
+  state.expYear = yearId;
+  const eRes = await db.from('expenses').select('*').eq('school_year_id', yearId)
+    .order('spent_on', { ascending: false }).order('id', { ascending: false }).limit(5000);
+  if (eRes.error) return notify(friendly(eRes.error), true);
+  state.exp = { years, yearId, yearLabel: years.find(y => y.id === yearId).label, rows: eRes.data };
+  drawExpenses();
+}
+
+function expSummaryHtml(rows) {
+  const total = rows.reduce((a, r) => a + Number(r.amount), 0);
+  const by = {};
+  rows.forEach(r => { by[r.category] = (by[r.category] || 0) + Number(r.amount); });
+  const cats = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return `<div class="stats">
+      <div class="stat"><span class="label">Total spent</span><b>${money(total)} GNF</b><span class="meta">${rows.length} expense${rows.length === 1 ? '' : 's'}</span></div>
+      ${cats.map(([c, v]) => `<div class="stat"><span class="label">${esc(c)}</span><b>${money(v)} GNF</b><span class="meta">${total ? Math.round(v / total * 100) : 0}% of spending</span></div>`).join('')}
+    </div>`;
+}
+
+function drawExpenses() {
+  const f = state.exp;
+  if (!f) return;
+  const { years, yearId, rows } = f;
+  const yearPicker = `<label class="year-pick noprint">School year
+    <select data-change="exp-year">
+      ${years.map(y => `<option value="${y.id}" ${y.id === yearId ? 'selected' : ''}>${esc(y.label)}${y.is_current ? ' (current)' : ''}</option>`).join('')}
+    </select></label>`;
+  const suggestions = [...new Set([...EXPENSE_CATEGORIES, ...rows.map(r => r.category)])];
+  const usedCats = [...new Set(rows.map(r => r.category))].sort((a, b) => a.localeCompare(b));
+
+  const cell = (r, field, value, type, label, extra = '') =>
+    `<input type="${type}" ${extra} data-table="expenses" data-field="${field}" data-id="${r.id}" data-orig="${esc(value)}" value="${field === 'amount' ? money(value) : esc(value)}" aria-label="${label}">`;
+  const rowHtml = r => `<tr data-id="${r.id}" data-cat="${esc(r.category)}" data-amount="${Number(r.amount)}"
+      data-q="${esc([r.category, r.description].filter(Boolean).join(' ').toLowerCase())}">
+    <td data-label="Date">${cell(r, 'spent_on', r.spent_on ?? '', 'date', 'Date')}</td>
+    <td data-label="Category">${cell(r, 'category', r.category ?? '', 'text', 'Category', 'list="exp-cats" autocomplete="off"')}</td>
+    <td class="wide" data-label="Description">${cell(r, 'description', r.description ?? '', 'text', 'Description')}</td>
+    <td data-label="Amount (GNF)">${cell(r, 'amount', Number(r.amount), 'text', 'Amount in GNF', 'inputmode="numeric"')}</td>
+    <td class="tools-cell"><div class="tools"><span class="state" role="status"></span>
+      <button class="btn small danger" type="button" data-action="del-expense" data-id="${r.id}">Delete</button></div></td></tr>`;
+
+  const filterBar = rows.length ? `<div class="add noprint">
+      <label>Search <input type="search" id="exp-q" placeholder="Category or description" value="${esc(state.expQuery)}"></label>
+      <label>Category <select data-change="exp-filter">
+        <option value="">All categories</option>
+        ${usedCats.map(c => `<option value="${esc(c)}" ${c === state.expCat ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+      </select></label>
+      <span class="meta" id="exp-count" role="status"></span>
+      <button class="btn small" type="button" data-action="export-expenses">Download as spreadsheet (CSV)</button>
+    </div>` : '';
+
+  $('#view').innerHTML = `<div style="display:grid;gap:1.25rem">
+    <h2>Expenses</h2>
+    <p class="lead">Record what the school spends. Click any field in the list to change it, and each change is saved as soon as you leave the field. Only admins can see this section.</p>
+    ${yearPicker}
+    <div id="exp-summary">${expSummaryHtml(rows)}</div>
+    <datalist id="exp-cats">${suggestions.map(c => `<option value="${esc(c)}"></option>`).join('')}</datalist>
+    <form class="add" data-form="expense-add">
+      <label>Date <input type="date" name="spent_on" value="${todayLocal()}" required></label>
+      <label>Category <input type="text" name="category" list="exp-cats" autocomplete="off" required></label>
+      <label>Description <input type="text" name="description"></label>
+      <label>Amount (GNF) <input type="text" inputmode="numeric" name="amount" required></label>
+      <button class="btn primary" type="submit">Add expense</button>
+    </form>
+    ${filterBar}
+    ${rows.length ? `<div class="table-wrap"><table class="grid" id="exp-table">
+        <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount (GNF)</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`
+      : '<div class="empty">No expenses recorded for this school year yet.</div>'}
+  </div>`;
+  applyExpenseFilter();
+}
+
+function applyExpenseFilter() {
+  const cat = state.expCat;
+  const q = state.expQuery.trim().toLowerCase();
+  let shown = 0, total = 0, sum = 0;
+  document.querySelectorAll('#exp-table tbody tr[data-q]').forEach(tr => {
+    total++;
+    const ok = (!cat || tr.dataset.cat === cat) && (!q || tr.dataset.q.includes(q));
+    tr.hidden = !ok;
+    if (ok) { shown++; sum += Number(tr.dataset.amount); }
+  });
+  const c = $('#exp-count');
+  if (c) c.textContent = `${shown} of ${total} expenses · ${money(sum)} GNF`;
+}
+
+// Saves one cell of the expenses table as soon as the person leaves it.
+async function saveExpenseCell(el) {
+  const f = state.exp;
+  const row = el.closest('tr');
+  const r = f.rows.find(x => x.id === Number(el.dataset.id));
+  const flag = row.querySelector('.state');
+  const say = (text, cls) => { flag.textContent = text; flag.className = 'state ' + cls; };
+  const field = el.dataset.field;
+  const orig = el.dataset.orig;
+  const restore = () => { el.value = field === 'amount' ? money(orig) : orig; };
+
+  let change, shown;
+  if (field === 'amount') {
+    const n = parseMoney(el.value);
+    if (Number.isNaN(n) || n <= 0) { restore(); say('Enter an amount above zero', 'bad'); return; }
+    if (n === Number(orig)) { el.value = money(n); return; }
+    change = { amount: n }; shown = String(n);
+  } else {
+    const value = el.value.trim();
+    if (value === orig) { el.value = value; return; }
+    if ((field === 'category' || field === 'spent_on') && !value) {
+      restore(); say(field === 'category' ? 'Category can’t be empty' : 'Date can’t be empty', 'bad'); return;
+    }
+    change = { [field]: nullIfEmpty(value) }; shown = value;
+  }
+
+  say('Saving…', '');
+  const res = await db.from('expenses').update(change).eq('id', r.id).select('id');
+  const error = res.error || (res.data?.length ? null : { message: 'Your role doesn’t allow this change.' });
+  if (error) { restore(); say('Not saved: ' + friendly(error), 'bad'); return; }
+
+  Object.assign(r, change);
+  el.dataset.orig = shown;
+  el.value = field === 'amount' ? money(shown) : shown;
+  row.dataset.cat = r.category;
+  row.dataset.amount = Number(r.amount);
+  row.dataset.q = [r.category, r.description].filter(Boolean).join(' ').toLowerCase();
+  $('#exp-summary').innerHTML = expSummaryHtml(f.rows);
+  applyExpenseFilter();
+  say('Saved ✓', 'ok');
+  setTimeout(() => { if (flag.textContent === 'Saved ✓') say('', ''); }, 2500);
+}
+
+/* ---------- Reports (admins only) ---------- */
+const signedMoney = n => (n < 0 ? '−' : '') + money(Math.abs(n));
+const pctOf = (a, b) => (b ? Math.round(a / b * 100) : 0) + '%';
+const monthLabel = k => new Date(k + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+
+// Turns the raw records of one school year into the figures the reports show.
+function buildReport(terms, enrollments, expenses, assigns, grades) {
+  const due = terms.reduce((a, t) => a + Number(t.amount), 0);
+  const people = enrollments.filter(e => e.students).map(e => {
+    const pays = e.payments || [];
+    const paid = pays.reduce((a, p) => a + Number(p.amount), 0);
+    return {
+      name: e.students.full_name, parent: e.students.guardian_name || '', phone: e.students.guardian_phone || '',
+      grade: e.grades?.name || 'No grade', sort: e.grades?.sort_order ?? 999, pays, paid, owed: Math.max(due - paid, 0),
+    };
+  });
+
+  const G = {};
+  grades.forEach(g => { G[g.name] = { name: g.name, sort: g.sort_order, students: 0, collected: 0, owed: 0, teachers: [] }; });
+  people.forEach(p => {
+    const g = G[p.grade] || (G[p.grade] = { name: p.grade, sort: p.sort, students: 0, collected: 0, owed: 0, teachers: [] });
+    g.students++; g.collected += p.paid; g.owed += p.owed;
+  });
+  const gradeName = Object.fromEntries(grades.map(g => [g.id, g.name]));
+  assigns.forEach(a => {
+    const g = G[gradeName[a.grade_id]];
+    const nm = a.teachers ? [a.teachers.first_name, a.teachers.last_name].filter(Boolean).join(' ') : '';
+    if (g && nm) g.teachers.push(nm);
+  });
+  const gradeRows = Object.values(G)
+    .map(g => ({ ...g, expected: g.students * due }))
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+
+  const termRows = terms.map(t => {
+    const amount = Number(t.amount);
+    let collected = 0, owed = 0;
+    people.forEach(p => {
+      const got = p.pays.filter(x => x.term_id === t.id).reduce((a, x) => a + Number(x.amount), 0);
+      collected += got; owed += Math.max(amount - got, 0);
+    });
+    return { name: t.name, expected: amount * people.length, collected, owed };
+  });
+
+  const methods = {};
+  people.forEach(p => p.pays.forEach(x => {
+    const k = x.method || 'Not recorded';
+    const m = methods[k] || (methods[k] = { name: k, count: 0, total: 0 });
+    m.count++; m.total += Number(x.amount);
+  }));
+
+  const months = {};
+  const slot = k => months[k] || (months[k] = { collected: 0, spent: 0 });
+  people.forEach(p => p.pays.forEach(x => { const k = String(x.paid_on || '').slice(0, 7); if (k) slot(k).collected += Number(x.amount); }));
+  expenses.forEach(x => { const k = String(x.spent_on || '').slice(0, 7); if (k) slot(k).spent += Number(x.amount); });
+  const monthRows = Object.keys(months).sort().map(k => ({ key: k, ...months[k], net: months[k].collected - months[k].spent }));
+
+  const cats = {};
+  expenses.forEach(x => { cats[x.category] = (cats[x.category] || 0) + Number(x.amount); });
+  const catRows = Object.entries(cats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+
+  const expected = due * people.length;
+  const collected = people.reduce((a, p) => a + p.paid, 0);
+  const spent = expenses.reduce((a, x) => a + Number(x.amount), 0);
+  return {
+    due, gradeRows, termRows, monthRows, catRows,
+    methodRows: Object.values(methods).sort((a, b) => b.total - a.total),
+    owedRows: people.filter(p => p.owed > 0).sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name)),
+    totals: { students: people.length, expected, collected, owed: people.reduce((a, p) => a + p.owed, 0), spent, net: collected - spent },
+  };
+}
+
+async function renderReports() {
+  const yRes = await db.from('school_years').select('id, label, is_current').order('label', { ascending: false });
+  if (yRes.error) return notify(friendly(yRes.error), true);
+  const years = yRes.data;
+  if (!years.length) {
+    state.rep = null;
+    $('#view').innerHTML = `<div style="display:grid;gap:1.25rem"><h2>Reports</h2>
+      <div class="empty">Add a school year first, in the School years section.</div></div>`;
+    return;
+  }
+  const yearId = years.find(y => String(y.id) === String(state.repYear))?.id
+    ?? years.find(y => y.is_current)?.id ?? years[0].id;
+  state.repYear = yearId;
+
+  const [tRes, eRes, xRes, aRes, gRes] = await Promise.all([
+    db.from('fee_terms').select('*').eq('school_year_id', yearId).order('sort_order').order('id'),
+    db.from('enrollments')
+      .select('id, grade_id, grades(name, sort_order), students(full_name, guardian_name, guardian_phone), payments(amount, term_id, paid_on, method)')
+      .eq('school_year_id', yearId).limit(5000),
+    db.from('expenses').select('category, amount, spent_on').eq('school_year_id', yearId).limit(5000),
+    db.from('teacher_assignments').select('grade_id, teachers(first_name, last_name)').eq('school_year_id', yearId),
+    db.from('grades').select('id, name, sort_order').order('sort_order').order('name'),
+  ]);
+  const err = tRes.error || eRes.error || xRes.error || aRes.error || gRes.error;
+  if (err) return notify(friendly(err), true);
+
+  state.rep = {
+    years, yearId, yearLabel: years.find(y => y.id === yearId).label,
+    ...buildReport(tRes.data, eRes.data, xRes.data, aRes.data, gRes.data),
+  };
+  drawReports();
+}
+
+function drawReports() {
+  const r = state.rep;
+  if (!r) return;
+  const t = r.totals;
+  const th = h => typeof h === 'string' ? `<th>${esc(h)}</th>` : `<th class="l${h.cls ? ' ' + h.cls : ''}">${esc(h.t)}</th>`;
+  const table = (head, body, foot = '', id = '') =>
+    `<div class="rt-wrap"><table class="rt"${id ? ` id="${id}"` : ''}><thead><tr>${head.map(th).join('')}</tr></thead><tbody>${body}</tbody>${foot ? `<tfoot>${foot}</tfoot>` : ''}</table></div>`;
+  const none = text => `<div class="empty">${text}</div>`;
+
+  const yearPicker = `<label class="year-pick noprint">School year
+    <select data-change="rep-year">
+      ${r.years.map(y => `<option value="${y.id}" ${y.id === r.yearId ? 'selected' : ''}>${esc(y.label)}${y.is_current ? ' (current)' : ''}</option>`).join('')}
+    </select></label>`;
+
+  const stats = `<div class="stats">
+      <div class="stat"><span class="label">Fees expected</span><b>${money(t.expected)} GNF</b><span class="meta">${t.students} students × ${money(r.due)}</span></div>
+      <div class="stat"><span class="label">Fees collected</span><b>${money(t.collected)} GNF</b><span class="meta">${pctOf(t.collected, t.expected)} of expected</span></div>
+      <div class="stat"><span class="label">Still owed</span><b>${money(t.owed)} GNF</b><span class="meta">${r.owedRows.length} students owe</span></div>
+      <div class="stat"><span class="label">Spent</span><b>${money(t.spent)} GNF</b><span class="meta">from Expenses</span></div>
+      <div class="stat"><span class="label">Collected minus spent</span><b class="${t.net < 0 ? 'neg' : 'pos'}">${signedMoney(t.net)} GNF</b><span class="meta">${t.net < 0 ? 'spending is above collections' : 'collections cover spending'}</span></div>
+    </div>`;
+
+  const maxM = Math.max(1, ...r.monthRows.flatMap(m => [m.collected, m.spent]));
+  const monthBody = r.monthRows.map(m => `<tr>
+      <td>${esc(monthLabel(m.key))}<span class="mbars" aria-hidden="true"><span class="mbar c" style="width:${Math.round(m.collected / maxM * 100)}%"></span><span class="mbar s" style="width:${Math.round(m.spent / maxM * 100)}%"></span></span></td>
+      <td>${money(m.collected)}</td><td>${money(m.spent)}</td><td class="${m.net < 0 ? 'neg' : 'pos'}">${signedMoney(m.net)}</td></tr>`).join('');
+  const monthFoot = `<tr><td>Total</td><td>${money(t.collected)}</td><td>${money(t.spent)}</td><td class="${t.net < 0 ? 'neg' : 'pos'}">${signedMoney(t.net)}</td></tr>`;
+
+  const gradeBody = r.gradeRows.map(g => `<tr><td>${esc(g.name)}</td><td class="l hide-sm">${esc(g.teachers.join(', ') || '—')}</td>
+      <td>${g.students}</td><td>${money(g.expected)}</td><td>${money(g.collected)}</td><td>${money(g.owed)}</td><td>${pctOf(g.collected, g.expected)}</td></tr>`).join('');
+  const gradeFoot = `<tr><td>All grades</td><td class="l hide-sm"></td><td>${t.students}</td><td>${money(t.expected)}</td><td>${money(t.collected)}</td><td>${money(t.owed)}</td><td>${pctOf(t.collected, t.expected)}</td></tr>`;
+
+  const termBody = r.termRows.map(x => `<tr><td>${esc(x.name)}</td><td>${money(x.expected)}</td><td>${money(x.collected)}</td><td>${money(x.owed)}</td><td>${pctOf(x.collected, x.expected)}</td></tr>`).join('');
+  const methodBody = r.methodRows.map(x => `<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${money(x.total)}</td></tr>`).join('');
+  const catBody = r.catRows.map(x => `<tr><td>${esc(x.name)}</td><td>${money(x.total)}</td><td>${pctOf(x.total, t.spent)}</td></tr>`).join('');
+
+  const owedGrades = [...new Set(r.owedRows.map(p => p.grade))];
+  const owedBody = r.owedRows.map(p => `<tr data-grade="${esc(p.grade)}" data-owed="${p.owed}">
+      <td>${esc(p.name)}</td><td class="l">${esc(p.grade)}</td><td class="l wrap">${esc(p.parent)}</td><td class="l">${esc(p.phone)}</td>
+      <td>${money(p.paid)}</td><td><b>${money(p.owed)}</b></td></tr>`).join('');
+
+  $('#view').innerHTML = `<div style="display:grid;gap:1.5rem">
+    <div style="display:grid;gap:.5rem">
+      <h2>Reports</h2>
+      <p class="lead">Figures for one school year, worked out from the payments in Fees and the spending in Expenses. Only admins can see this section.</p>
+      <p class="meta">School year ${esc(r.yearLabel)} · ${new Date().toLocaleDateString('en-GB')}</p>
+    </div>
+    <div class="noprint" style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:end">${yearPicker}
+      <button class="btn" type="button" data-action="print">Print this report</button></div>
+    ${stats}
+
+    <section class="repsec"><h3>Month by month</h3>
+      <p class="legend">The bars compare the two amounts: <span class="key c"></span> collected, <span class="key s"></span> spent. Net is collected minus spent.</p>
+      ${r.monthRows.length ? table(['Month', 'Collected', 'Spent', 'Net'], monthBody, monthFoot) : none('No payments or expenses with a date in this school year yet.')}</section>
+
+    <section class="repsec"><h3>By grade</h3>
+      ${r.gradeRows.length ? table(['Grade', { t: 'Teacher', cls: 'hide-sm' }, 'Students', 'Expected', 'Collected', 'Owed', 'Paid'], gradeBody, gradeFoot) : none('No grades yet.')}</section>
+
+    <section class="repsec"><h3>By term</h3>
+      ${r.termRows.length ? table(['Term', 'Expected', 'Collected', 'Owed', 'Paid'], termBody) : none('No fee terms are set up for this school year.')}</section>
+
+    <section class="repsec"><h3>How families paid</h3>
+      ${r.methodRows.length ? table(['Method', 'Payments', 'Total'], methodBody) : none('No payments yet.')}</section>
+
+    <section class="repsec"><h3>Spending by category</h3>
+      ${r.catRows.length ? table(['Category', 'Spent', 'Share'], catBody) : none('No expenses yet.')}</section>
+
+    <section class="repsec"><h3>Families who still owe</h3>
+      ${r.owedRows.length ? `<div class="add noprint">
+          <label>Grade <select data-change="rep-grade">
+            <option value="">All grades</option>
+            ${owedGrades.map(g => `<option value="${esc(g)}" ${g === state.repGrade ? 'selected' : ''}>${esc(g)}</option>`).join('')}
+          </select></label>
+          <span class="meta" id="rep-owed-count" role="status"></span>
+          <button class="btn small" type="button" data-action="export-owed">Download call list (CSV)</button>
+        </div>
+        ${table(['Student', { t: 'Grade' }, { t: 'Parent or guardian' }, { t: 'Phone' }, 'Paid', 'Owes'], owedBody, '', 'rep-owed')}`
+        : none('Every family is paid up.')}</section>
+  </div>`;
+  applyOwedFilter();
+}
+
+function applyOwedFilter() {
+  const g = state.repGrade;
+  let shown = 0, sum = 0;
+  document.querySelectorAll('#rep-owed tbody tr[data-grade]').forEach(tr => {
+    const ok = !g || tr.dataset.grade === g;
+    tr.hidden = !ok;
+    if (ok) { shown++; sum += Number(tr.dataset.owed); }
+  });
+  const c = $('#rep-owed-count');
+  if (c) c.textContent = `${shown} student${shown === 1 ? '' : 's'} owe ${money(sum)} GNF`;
+}
+
 /* ---------- Form submissions ---------- */
 const nullIfEmpty = v => (v === '' || v == null ? null : v);
 
@@ -1123,6 +1526,15 @@ const FORMS = {
     }).eq('id', id);
     state.editing = null;
     return done(error, 'Details saved.', renderStudents);
+  },
+  async 'expense-add'(f) {
+    const amount = parseMoney(f.amount);
+    if (Number.isNaN(amount) || amount <= 0) return notify('Enter an amount above zero, in whole GNF.', true);
+    const { error } = await db.from('expenses').insert({
+      school_year_id: state.expYear, category: f.category.trim(),
+      description: nullIfEmpty((f.description || '').trim()), amount, spent_on: f.spent_on,
+    });
+    return done(error, 'Expense added.', renderExpenses);
   },
   async 'pay-add'(f, id, form) {
     const amount = Number(f.amount);
@@ -1207,6 +1619,25 @@ const ACTIONS = {
     const { error } = await db.from('payments').delete().eq('id', b.dataset.id);
     return done(error, 'Payment deleted.', renderFees);
   },
+  async 'del-expense'(b) {
+    if (!confirm('Delete this expense? This can’t be undone.')) return;
+    const { error } = await db.from('expenses').delete().eq('id', b.dataset.id);
+    return done(error, 'Expense deleted.', renderExpenses);
+  },
+  'export-expenses'() {
+    const f = state.exp;
+    if (!f) return;
+    downloadCsv(`expenses-${f.yearLabel}.csv`, [['Date', 'Category', 'Description', 'Amount (GNF)'],
+      ...f.rows.map(r => [r.spent_on, r.category, r.description, Number(r.amount)])]);
+  },
+  'export-owed'() {
+    const r = state.rep;
+    if (!r) return;
+    const g = state.repGrade;
+    downloadCsv(`balances-${r.yearLabel}.csv`, [['Student', 'Grade', 'Parent or guardian', 'Parent phone', 'Total due', 'Paid', 'Owes'],
+      ...r.owedRows.filter(p => !g || p.grade === g).map(p => [p.name, p.grade, p.parent, p.phone, r.due, p.paid, p.owed])]);
+  },
+  'print'() { window.print(); },
   async 'make-terms'(b) {
     const y = Number(b.dataset.year);
     const base = [
@@ -1241,6 +1672,10 @@ const CHANGES = {
   'stu-filter': el => { state.stuGrade = el.value; applyStudentFilter(); },
   'fee-year': el => { state.feeYear = el.value; state.openFee = null; return renderFees(); },
   'fee-filter': el => { state[el.dataset.key] = el.value; applyFeeFilter(); },
+  'exp-year': el => { state.expYear = el.value; return renderExpenses(); },
+  'exp-filter': el => { state.expCat = el.value; applyExpenseFilter(); },
+  'rep-year': el => { state.repYear = el.value; return renderReports(); },
+  'rep-grade': el => { state.repGrade = el.value; applyOwedFilter(); },
   'pay-term': el => {
     const amt = el.form?.elements.amount;
     const opt = el.selectedOptions[0];
@@ -1255,7 +1690,7 @@ document.addEventListener('click', e => {
 
 document.addEventListener('change', e => {
   const cellEl = e.target.closest('[data-field]');
-  if (cellEl) { ({ teachers: saveTeacherField, fees: saveFeeCell }[cellEl.dataset.table] || saveStudentField)(cellEl); return; }
+  if (cellEl) { ({ teachers: saveTeacherField, fees: saveFeeCell, expenses: saveExpenseCell }[cellEl.dataset.table] || saveStudentField)(cellEl); return; }
   const el = e.target.closest('[data-change]');
   if (el && CHANGES[el.dataset.change]) CHANGES[el.dataset.change](el);
 });
@@ -1263,6 +1698,7 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'stu-q') { state.stuQuery = e.target.value; applyStudentFilter(); }
   if (e.target.id === 'fee-q') { state.feeQuery = e.target.value; applyFeeFilter(); }
+  if (e.target.id === 'exp-q') { state.expQuery = e.target.value; applyExpenseFilter(); }
 });
 
 /* ---------- Session handling ---------- */
