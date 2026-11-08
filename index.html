@@ -819,7 +819,7 @@ function payCellsHtml(r, t, slots) {
     const p = tp[i];
     const cls = `pay ${payClass(paid, t)}${i === 0 ? ' termstart' : ''}`;
     const label = `${esc(shortTerm(t))}${slots > 1 ? ' payment ' + (i + 1) : ''} — ${esc(r.s.full_name)}`;
-    const lab = esc(shortTerm(t).replace('Quarter ', 'Q')) + ' payment' + (slots > 1 ? ' ' + (i + 1) : '');
+    const lab = esc(shortTerm(t).replace('Quarter ', 'Q')) + ' PYMT' + (slots > 1 ? ' ' + (i + 1) : '');
     if (p && !isAdmin()) {
       html += `<td class="${cls}" data-termcell="${t.id}" data-label="${lab}"><span class="ro">${money(p.amount)}</span></td>`;
     } else if (p || i === tp.length) {
@@ -928,7 +928,7 @@ function drawFees() {
 
   const groupHead = terms.map(t => `<th colspan="${slots[t.id]}" class="termgroup">${esc(shortTerm(t))}<small class="meta">fee ${money(t.amount)}</small></th>`).join('');
   const slotHead = terms.map(t => Array.from({ length: slots[t.id] },
-    (_, i) => `<th class="termh${i === 0 ? ' termstart' : ''}">${slots[t.id] > 1 ? 'Payment ' + (i + 1) : 'Payment'}</th>`).join('')).join('');
+    (_, i) => `<th class="termh${i === 0 ? ' termstart' : ''}" title="${slots[t.id] > 1 ? 'Payment ' + (i + 1) : 'Payment'}">${slots[t.id] > 1 ? 'PYMT ' + (i + 1) : 'PYMT'}</th>`).join('')).join('');
 
   const table = rows.length ? `<div class="table-wrap"><table class="grid" id="fee-table" style="--fee-min:${37 + totalSlots * 7.5}rem">
       <thead>
