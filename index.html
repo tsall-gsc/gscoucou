@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GS CouCou</title>
+<title>School Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
@@ -120,12 +120,15 @@
   .grid tr.detail label { flex: 1 1 10rem; }
 
   /* Editable fees table */
-  #fee-table { min-width: 62rem; }
-  #fee-table thead tr:first-child th:nth-child(2) { width: 9rem; }
-  #fee-table thead tr:first-child th:nth-child(4) { width: 11rem; }
-  #fee-table thead tr:first-child th:nth-child(5) { width: 7rem; }
-  #fee-table th[colspan] { text-align: center; }
-  #fee-table th.termh { text-align: right; width: 9.5rem; }
+  #fee-table { min-width: 72rem; }
+  #fee-table th.col-name, #fee-table td.col-name { position: sticky; left: 0; z-index: 1; background: var(--card); min-width: 13rem; }
+  #fee-table th.col-grade { width: 8rem; }
+  #fee-table th.col-bal { width: 10rem; }
+  #fee-table th.col-tools { width: 6rem; }
+  #fee-table th.termgroup { text-align: center; border-left: 1px solid var(--line); }
+  #fee-table th.termh { text-align: right; width: 7.5rem; font-weight: 400; }
+  #fee-table .termstart { border-left: 1px solid var(--line); }
+  .grid td .ro.muted { color: var(--muted); }
   #fee-table th small { display: block; font-weight: 400; }
   .grid td.pay input, .grid td.pay .ro { text-align: right; }
   .grid td.pay.ok { background: var(--ok-bg); }
@@ -166,7 +169,7 @@
 <!-- Login screen -->
 <section id="login" hidden>
   <form class="login-box" data-form="login">
-    <h1>GS CouCou Management</h1>
+    <h1>School Manager</h1>
     <p class="hint">Sign in with the account your administrator created for you.</p>
     <label>Email <input type="email" name="email" autocomplete="username" required></label>
     <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
@@ -178,7 +181,7 @@
 <!-- Main app -->
 <div id="app" hidden>
   <aside>
-    <div class="brand">GS CouCou</div>
+    <div class="brand">School Manager</div>
     <nav id="nav" aria-label="Sections"></nav>
     <div class="who">
       <span id="who-name"></span>
@@ -227,7 +230,7 @@ function friendly(error) {
   if (error.code === '23505') return 'That name already exists. Choose a different one.';
   if (error.code === '23503') return 'This item is still in use (by students, teachers or payments), so it can’t be deleted.';
   if (error.code === '42501') return 'Your role doesn’t allow this action.';
-  if (['PGRST205', 'PGRST204', '42P01', '42703'].includes(error.code)) return 'The database is missing part of the fees setup. Run fees.sql in the Supabase SQL Editor, then reload.';
+  if (['PGRST205', 'PGRST204', '42P01', '42703'].includes(error.code)) return 'The database is missing part of the fees setup. Run fees.sql and installments.sql in the Supabase SQL Editor, then reload.';
   return error.message || 'Something went wrong. Try again.';
 }
 
@@ -729,17 +732,38 @@ function feeStatsHtml(f) {
     </div>`;
 }
 
-// One payment cell: an editable amount when the person is allowed to change it, plain text otherwise.
-function payCellHtml(r, t) {
-  const tp = r.pays.filter(p => p.term_id === t.id);
+// The payments of one student for one term, oldest first. Payment 1, 2, 3 in the table follow this order.
+const termPaysOf = (r, t) => r.pays.filter(p => p.term_id === t.id)
+  .sort((a, b) => (a.paid_on < b.paid_on ? -1 : a.paid_on > b.paid_on ? 1 : a.id - b.id));
+
+// How many payment columns each term gets: the number allowed, or more if a student already has more.
+function slotCountsOf(f) {
+  const out = {};
+  f.terms.forEach(t => {
+    out[t.id] = f.rows.reduce((m, r) => Math.max(m, termPaysOf(r, t).length), Math.max(Number(t.installments) || 1, 1));
+  });
+  return out;
+}
+
+// The payment cells of one term for one student: an amount box when it can be changed, plain text otherwise.
+function payCellsHtml(r, t, slots) {
+  const tp = termPaysOf(r, t);
   const paid = r.paidBy[t.id] || 0;
-  const cls = 'pay ' + payClass(paid, t);
-  if (tp.length > 1 || (tp.length === 1 && !isAdmin())) {
-    return `<td class="${cls}"><span class="ro">${money(paid)}</span>${tp.length > 1 ? `<small class="meta">${tp.length} payments</small>` : ''}</td>`;
+  let html = '';
+  for (let i = 0; i < slots; i++) {
+    const p = tp[i];
+    const cls = `pay ${payClass(paid, t)}${i === 0 ? ' termstart' : ''}`;
+    const label = `${esc(shortTerm(t))}${slots > 1 ? ' payment ' + (i + 1) : ''} — ${esc(r.s.full_name)}`;
+    if (p && !isAdmin()) {
+      html += `<td class="${cls}" data-termcell="${t.id}"><span class="ro">${money(p.amount)}</span></td>`;
+    } else if (p || i === tp.length) {
+      html += `<td class="${cls}" data-termcell="${t.id}"><input type="text" inputmode="numeric" data-table="fees" data-field="pay" data-term="${t.id}"
+        data-payment="${p ? p.id : ''}" data-orig="${p ? Number(p.amount) : 0}" value="${p ? money(p.amount) : ''}" placeholder="0" aria-label="${label}"></td>`;
+    } else {
+      html += `<td class="${cls}" data-termcell="${t.id}"><span class="ro muted" title="Fill the payment before it first">—</span></td>`;
+    }
   }
-  return `<td class="${cls}"><input type="text" inputmode="numeric" data-table="fees" data-field="pay" data-term="${t.id}"
-      data-payment="${tp[0]?.id ?? ''}" data-orig="${paid}" value="${paid ? money(paid) : ''}" placeholder="0"
-      aria-label="${esc(shortTerm(t))} paid — ${esc(r.s.full_name)}"></td>`;
+  return html;
 }
 
 function panelHtml(r, terms) {
@@ -776,7 +800,7 @@ function drawFees() {
       ${years.map(y => `<option value="${y.id}" ${y.id === yearId ? 'selected' : ''}>${esc(y.label)}${y.is_current ? ' (current)' : ''}</option>`).join('')}
     </select></label>`;
   const head = `<h2>Fees</h2>
-    <p class="lead">Type what each family has paid in the term columns. The balance is calculated for you and can’t be typed over. “Details” shows every payment and lets you record one with its date and method. ${isAdmin()
+    <p class="lead">Type each payment a family makes in the term columns. A term can be paid in several instalments, filled in order. The balance is calculated for you and can’t be typed over. “Details” shows every payment with its date and method. ${isAdmin()
       ? 'As an admin you can also change or remove a payment.'
       : 'You can record new payments. An admin can correct existing ones.'}</p>${yearPicker}`;
 
@@ -784,17 +808,22 @@ function drawFees() {
     $('#view').innerHTML = `<div style="display:grid;gap:1.25rem">${head}
       <div class="empty">No fee terms are set up for this school year.
       ${isAdmin() ? `<p style="margin-top:.75rem"><button class="btn primary" type="button" data-action="make-terms" data-year="${yearId}">Create the 3 standard terms</button></p>
-        <p class="meta" style="margin-top:.5rem">Quarter 1 (Oct–Dec) 800,000 GNF · Quarter 2 (Jan–Mar) 350,000 GNF · Quarter 3 (Apr–Jun) 50,000 GNF</p>`
+        <p class="meta" style="margin-top:.5rem">Quarter 1 (Oct–Dec) 800,000 GNF in up to 3 payments · Quarter 2 (Jan–Mar) 350,000 GNF in up to 3 payments · Quarter 3 (Apr–Jun) 50,000 GNF</p>`
         : '<p style="margin-top:.5rem">An admin needs to set them up.</p>'}</div></div>`;
     return;
   }
 
+  const slots = slotCountsOf(f);
+  f.slots = slots;
+  const totalSlots = terms.reduce((a, t) => a + slots[t.id], 0);
+
   const termEditor = isAdmin() ? `<details class="termbox"><summary>Change fee amounts</summary>
       <form data-form="terms-save" class="add">
         ${terms.map(t => `<label>Term name <input type="text" name="name_${t.id}" value="${esc(t.name)}" required></label>
-          <label>Amount (GNF) <input type="number" name="amount_${t.id}" min="0" step="1" value="${Number(t.amount)}" required></label>`).join('')}
-        <button class="btn primary" type="submit">Save amounts</button>
-        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that term.</p>
+          <label>Amount (GNF) <input type="number" name="amount_${t.id}" min="0" step="1" value="${Number(t.amount)}" required></label>
+          ${t.installments !== undefined ? `<label>Payments allowed <input type="number" name="inst_${t.id}" min="1" max="6" step="1" value="${Number(t.installments) || 1}" required></label>` : ''}`).join('')}
+        <button class="btn primary" type="submit">Save</button>
+        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that term. “Payments allowed” is how many payment columns the term has in the table.</p>
       </form></details>` : '';
 
   const rowHtml = r => {
@@ -806,13 +835,13 @@ function drawFees() {
       </select>`;
     const main = `<tr data-enr="${r.e.id}" data-grade="${r.e.grade_id ?? ''}" data-status="${r.balance > 0 ? 'owing' : 'paid'}"
         data-owed="${Math.max(r.balance, 0)}" data-q="${esc(q)}">
-      <td><input type="text" data-table="fees" data-field="full_name" data-orig="${esc(r.s.full_name)}" value="${esc(r.s.full_name)}" aria-label="Full name — ${esc(r.s.full_name)}" required></td>
+      <td class="col-name"><input type="text" data-table="fees" data-field="full_name" data-orig="${esc(r.s.full_name)}" value="${esc(r.s.full_name)}" aria-label="Full name — ${esc(r.s.full_name)}" required></td>
       <td>${gradeCell}</td>
-      ${terms.map(t => payCellHtml(r, t)).join('')}
+      ${terms.map(t => payCellsHtml(r, t, slots[t.id])).join('')}
       <td><span class="bal ${r.balance > 0 ? 'owe' : ''}">${balText(r)}</span></td>
       <td><div class="tools"><span class="state" role="status"></span>
         <button class="btn small" type="button" data-action="open-fee" data-id="${r.e.id}">${isOpen ? 'Close' : 'Details'}</button></div></td></tr>`;
-    const detail = isOpen ? `<tr class="detail"><td colspan="${4 + terms.length}">${panelHtml(r, terms)}</td></tr>` : '';
+    const detail = isOpen ? `<tr class="detail"><td colspan="${4 + totalSlots}">${panelHtml(r, terms)}</td></tr>` : '';
     return main + detail;
   };
 
@@ -831,10 +860,14 @@ function drawFees() {
       ${isAdmin() ? '<button class="btn small" type="button" data-action="export-fees">Download as spreadsheet (CSV)</button>' : ''}
     </div>` : '';
 
+  const groupHead = terms.map(t => `<th colspan="${slots[t.id]}" class="termgroup">${esc(shortTerm(t))}<small class="meta">fee ${money(t.amount)}</small></th>`).join('');
+  const slotHead = terms.map(t => Array.from({ length: slots[t.id] },
+    (_, i) => `<th class="termh${i === 0 ? ' termstart' : ''}">${slots[t.id] > 1 ? 'Payment ' + (i + 1) : 'Payment'}</th>`).join('')).join('');
+
   const table = rows.length ? `<div class="table-wrap"><table class="grid" id="fee-table">
       <thead>
-        <tr><th rowspan="2">Full name</th><th rowspan="2">Grade</th><th colspan="${terms.length}">Payments (GNF)</th><th rowspan="2">Balance<small class="meta">calculated</small></th><th rowspan="2"><span class="sr-only">Actions</span></th></tr>
-        <tr>${terms.map(t => `<th class="termh">${esc(shortTerm(t))}<small class="meta">fee ${money(t.amount)}</small></th>`).join('')}</tr>
+        <tr><th rowspan="2" class="col-name">Full name</th><th rowspan="2" class="col-grade">Grade</th>${groupHead}<th rowspan="2" class="col-bal">Balance<small class="meta">calculated</small></th><th rowspan="2" class="col-tools"><span class="sr-only">Actions</span></th></tr>
+        <tr>${slotHead}</tr>
       </thead>
       <tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`
     : '<div class="empty">No students are enrolled for this school year yet.</div>';
@@ -897,15 +930,16 @@ async function saveFeeCell(el) {
     refreshRow(); done(); return;
   }
 
-  // field === 'pay': the total paid for one term
+  // field === 'pay': one payment of one term
   const term = f.terms.find(t => t.id === Number(el.dataset.term));
   const origN = Number(orig || 0);
   const showOrig = () => { el.value = origN ? money(origN) : ''; };
   const n = parseMoney(el.value);
   if (Number.isNaN(n)) { showOrig(); say('Enter a whole number', 'bad'); return; }
   if (n === origN) { showOrig(); return; }
-  if (n > Number(term.amount) &&
-      !confirm(`This is more than the fee for ${term.name} (${money(term.amount)} GNF). Record it anyway?`)) { showOrig(); return; }
+  const after = (r.paidBy[term.id] || 0) - origN + n;
+  if (after > Number(term.amount) &&
+      !confirm(`With this payment, ${term.name} would reach ${money(after)} GNF, more than its fee of ${money(term.amount)} GNF. Record it anyway?`)) { showOrig(); return; }
 
   const paymentId = el.dataset.payment ? Number(el.dataset.payment) : null;
   say('Saving…', '');
@@ -930,8 +964,11 @@ async function saveFeeCell(el) {
   else Object.assign(r.pays.find(p => p.id === paymentId), res.data[0]);
   recalcFeeRow(r, f.due);
 
-  // Redraw just this cell (it may turn read-only for data-entry users), then the totals.
-  el.closest('td').outerHTML = payCellHtml(r, term);
+  // Redraw this student's cells for the term (payments shift, the next box opens, the colour changes).
+  const cells = rowEl.querySelectorAll(`td[data-termcell="${term.id}"]`);
+  const html = payCellsHtml(r, term, f.slots[term.id]);
+  for (let i = cells.length - 1; i > 0; i--) cells[i].remove();
+  cells[0].outerHTML = html;
   refreshRow();
   done();
   if (state.openFee === r.e.id) drawFees();      // keep an open payment history up to date
@@ -1035,8 +1072,9 @@ const FORMS = {
   async 'terms-save'(f) {
     const ids = Object.keys(f).map(k => k.match(/^amount_(\d+)$/)).filter(Boolean).map(m => m[1]);
     for (const id of ids) {
-      const { error } = await db.from('fee_terms')
-        .update({ name: f['name_' + id].trim(), amount: Number(f['amount_' + id]) }).eq('id', id);
+      const change = { name: f['name_' + id].trim(), amount: Number(f['amount_' + id]) };
+      if (f['inst_' + id] !== undefined) change.installments = Math.min(6, Math.max(1, Number(f['inst_' + id]) || 1));
+      const { error } = await db.from('fee_terms').update(change).eq('id', id);
       if (error) return notify(friendly(error), true);
     }
     return done(null, 'Fee terms updated.', renderFees);
@@ -1105,11 +1143,15 @@ const ACTIONS = {
   },
   async 'make-terms'(b) {
     const y = Number(b.dataset.year);
-    const { error } = await db.from('fee_terms').insert([
-      { school_year_id: y, name: 'Quarter 1 (Oct–Dec)', amount: 800000, sort_order: 1 },
-      { school_year_id: y, name: 'Quarter 2 (Jan–Mar)', amount: 350000, sort_order: 2 },
-      { school_year_id: y, name: 'Quarter 3 (Apr–Jun)', amount: 50000, sort_order: 3 },
-    ]);
+    const base = [
+      { school_year_id: y, name: 'Quarter 1 (Oct–Dec)', amount: 800000, sort_order: 1, installments: 3 },
+      { school_year_id: y, name: 'Quarter 2 (Jan–Mar)', amount: 350000, sort_order: 2, installments: 3 },
+      { school_year_id: y, name: 'Quarter 3 (Apr–Jun)', amount: 50000, sort_order: 3, installments: 1 },
+    ];
+    let { error } = await db.from('fee_terms').insert(base);
+    if (error && ['PGRST204', '42703'].includes(error.code)) {
+      ({ error } = await db.from('fee_terms').insert(base.map(({ installments, ...t }) => t)));
+    }
     return done(error, 'Fee terms created.', renderFees);
   },
   'export-fees'() {
