@@ -1,5 +1,6 @@
-# Never commit exports or backups containing school data
-*.json
+# Personal data must never reach a public repository
 *.csv
-*.xlsx
-.env
+db/imports/import_teachers.sql
+
+node_modules/
+.DS_Store

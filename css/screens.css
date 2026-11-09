@@ -1,0 +1,102 @@
+/* Lists, tables and the per-screen pieces: expenses, reports, students, teachers, fees. */
+/* Add form and rows */
+.add { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; }
+.add label { flex: 1 1 10rem; }
+.rows { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.rows li { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .75rem 1rem; border-top: 1px solid var(--line); }
+.rows li:first-child { border-top: 0; }
+.rows .grow { flex: 1 1 12rem; font-weight: 700; }
+.rows .meta { color: var(--muted); font-size: .95rem; }
+.rows form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; width: 100%; }
+.rows form label { flex: 1 1 8rem; }
+.actions { display: flex; gap: .4rem; margin-left: auto; }
+.badge { background: var(--ok-bg); color: var(--accent); border-radius: 99px; padding: .1rem .6rem; font-size: .85rem; font-weight: 700; }
+.empty { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 1.5rem; color: var(--muted); }
+
+/* Reports and expenses */
+h3 { font-size: 1.15rem; line-height: 1.2; margin: 0; }
+.repsec { display: grid; gap: .6rem; }
+.rt-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+table.rt { width: 100%; border-collapse: collapse; min-width: 30rem; }
+.rt th, .rt td { padding: .55rem .75rem; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.rt thead th { border-top: 0; color: var(--muted); font-size: .9rem; }
+.rt th:first-child, .rt td:first-child, .rt th.l, .rt td.l { text-align: left; }
+.rt td.wrap { white-space: normal; }
+.rt tfoot td { font-weight: 700; background: var(--paper); }
+.rt td.pos, b.pos { color: var(--accent); }
+.rt td.neg, b.neg { color: var(--danger); }
+.mbars { display: flex; flex-direction: column; gap: 2px; margin-top: .3rem; min-width: 7rem; }
+.mbar { display: block; height: 6px; border-radius: 3px; min-width: 2px; }
+.mbar.c, .key.c { background: var(--accent); }
+.mbar.s, .key.s { background: #d9a441; }
+.legend { color: var(--muted); font-size: .9rem; }
+.key { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; vertical-align: middle; }
+#exp-table { min-width: 54rem; }
+#exp-table th:nth-child(1) { width: 10rem; }
+#exp-table th:nth-child(2) { width: 12rem; }
+#exp-table th:nth-child(4) { width: 10rem; }
+#exp-table th:nth-child(5) { width: 7rem; }
+#exp-table td:nth-child(4) input { text-align: right; }
+
+/* Editable students table */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.table-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+table.grid { width: 100%; border-collapse: collapse; min-width: 58rem; }
+.grid th { text-align: left; font-weight: 700; color: var(--muted); font-size: .95rem; padding: .6rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+#stu-table th:nth-child(2) { width: 9rem; }
+#stu-table th:nth-child(4) { width: 11rem; }
+#stu-table th:nth-child(5) { width: 15rem; }
+#teach-table { min-width: 64rem; }
+#teach-table th:nth-child(3) { width: 11rem; }
+#teach-table th:nth-child(5) { width: 10rem; }
+#teach-table th:nth-child(6) { width: 15rem; }
+.ro { display: block; padding: .4rem .5rem; }
+.grid td { padding: .2rem .3rem; border-top: 1px solid var(--line); vertical-align: middle; }
+.grid input, .grid select { border-color: transparent; background: transparent; padding: .4rem .5rem; }
+.grid input:hover, .grid select:hover { border-color: var(--line); }
+.grid input:focus, .grid select:focus { border-color: var(--accent); background: #fff; }
+.grid tr.inactive td { opacity: .65; }
+.grid small { display: block; padding: 0 .5rem; }
+.grid .tools { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; }
+.state { font-size: .85rem; min-width: 4.5rem; text-align: right; }
+.state.ok { color: var(--accent); font-weight: 700; }
+.state.bad { color: var(--danger); }
+.grid tr.detail td { background: var(--paper); padding: .75rem 1rem; }
+.grid tr.detail form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+.grid tr.detail label { flex: 1 1 10rem; }
+
+/* Editable fees table */
+#fee-table { min-width: var(--fee-min, 90rem); }
+#fee-table th.col-name, #fee-table td.col-name { position: sticky; left: 0; z-index: 1; background: var(--card); min-width: 13rem; }
+#fee-table th.col-grade { width: 8rem; }
+#fee-table th.col-bal { width: 10rem; }
+#fee-table th.col-tools { width: 6rem; }
+#fee-table th.termgroup { text-align: center; border-left: 1px solid var(--line); }
+#fee-table th.termh { text-align: right; width: 7.5rem; font-weight: 400; }
+#fee-table .termstart { border-left: 1px solid var(--line); }
+.grid td .ro.muted { color: var(--muted); }
+#fee-table th small { display: block; font-weight: 400; }
+.grid td.pay input, .grid td.pay .ro { text-align: right; }
+.grid td.pay.ok { background: var(--ok-bg); }
+.grid td.pay.part { background: #fbf0d9; }
+.grid td .bal { display: block; padding: .4rem .5rem; min-width: 0; }
+
+/* Fees */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; display: grid; gap: .1rem; }
+.stat .label { color: var(--muted); font-size: .9rem; }
+.stat b { font-size: 1.25rem; }
+.tchips { display: flex; flex-wrap: wrap; gap: .35rem; flex: 2 1 18rem; }
+.tchip { border-radius: 99px; padding: .1rem .65rem; font-size: .85rem; border: 1px solid transparent; }
+.tchip.ok { background: var(--ok-bg); color: var(--accent); font-weight: 700; }
+.tchip.part { background: #fbf0d9; color: #7a5a0a; }
+.tchip.none { background: var(--err-bg); color: var(--danger); }
+.bal { font-weight: 700; min-width: 9rem; }
+.bal.owe { color: var(--danger); }
+.panel { flex: 1 1 100%; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; display: grid; gap: .75rem; }
+.pitem { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; padding: .35rem 0; border-top: 1px solid var(--line); }
+.pitem:first-child { border-top: 0; }
+.pitem .amt { font-weight: 700; min-width: 8rem; }
+.termbox summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+.termbox { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; }
+.termbox form.add { margin-top: .75rem; border: 0; padding: 0; }
