@@ -5,7 +5,7 @@
 // (see any of them). Add a new screen by creating its file and listing it in SCREENS below.
 
 import { db, connect } from './core/db.js';
-import { state, isAdmin, ROLE_LABEL } from './core/state.js';
+import { state, isAdmin, canSeeMoney, ROLE_LABEL } from './core/state.js';
 import { $, esc } from './core/ui.js';
 
 import { screen as years }    from './screens/years.js';
@@ -17,11 +17,12 @@ import { screen as fees }     from './screens/fees.js';
 import { screen as expenses } from './screens/expenses.js';
 import { screen as reports }  from './screens/reports.js';
 
-// Menu order. `group` is the heading in the menu; `admin: true` hides a screen from data-entry users.
+// Menu order. `group` is the heading in the menu.
+// `admin: true` shows a screen to admins only; `money: true` also shows it to read-only viewers.
 const SCREENS = [years, grades, teachers, assign, students, fees, expenses, reports];
 
 // ---------- menu ----------
-const visibleScreens = () => SCREENS.filter(s => !s.admin || isAdmin());
+const visibleScreens = () => SCREENS.filter(s => (!s.admin || isAdmin()) && (!s.money || canSeeMoney()));
 
 function renderNav() {
   let last = '';

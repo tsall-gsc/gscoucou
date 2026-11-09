@@ -36,7 +36,7 @@ js/
 db/
   schema.sql            Fresh install: tables, roles, row-level security
   migrations/           Changes made after the first release. Run in this order:
-                          fees.sql -> installments.sql -> expenses.sql
+                          fees.sql -> installments.sql -> expenses.sql -> viewer-role.sql
   maintenance/          One-off repairs (see the table below). Safe to run twice.
   imports/              One-off data loads. import_teachers.sql holds phone numbers and is git-ignored.
 ```
@@ -86,18 +86,33 @@ Always pass database text through `esc()` before putting it in HTML.
 | `super_admin` | Everything, including deleting and changing roles |
 | `admin` | Manage records, correct or delete payments, expenses, reports |
 | `user` (data entry) | See students, teachers and fees; add and edit students; record payments |
+| `viewer` (read-only) | See everything and run the Reports; cannot add, change or delete anything |
 
 Roles live in the `profiles` table and are enforced by policies in the database.
 
 ## Set up from scratch
 
 1. Create a Supabase project (free plan is enough). Choose the region closest to the school.
-2. SQL Editor: run `db/schema.sql`, then `db/migrations/fees.sql`, `installments.sql`, `expenses.sql`.
+2. SQL Editor: run `db/schema.sql`, then `db/migrations/fees.sql`, `installments.sql`, `expenses.sql`
+   and, if you want a read-only role, `viewer-role.sql`.
 3. Authentication: **turn off public sign-ups**. Add your own user (tick "Auto confirm"), then make it super admin
    (Table Editor, `profiles` table, set `role` to `super_admin`).
 4. Copy `config.example.js` to `config.js` and paste in the project URL (base address only) and the publishable/anon key.
    Never use the secret or `service_role` key: this file is public.
 5. Publish: GitHub, Settings, Pages, "Deploy from a branch". The repo must be public on the free plan.
+
+## Create a read-only user (for example a governor who only needs the reports)
+
+1. Run `db/migrations/viewer-role.sql` once (after `fees.sql` and `expenses.sql`).
+2. Supabase, Authentication, Users, **Add user** (tick "Auto confirm user").
+3. Table Editor, `profiles` table, find that user and set `role` to `viewer`.
+
+A viewer sees the Reports and Fees screens and the lists, with no edit boxes, and cannot see the Expenses screen.
+The database refuses their writes even if someone calls the API directly. The viewer can read expenses
+(the reports need them) but not staff pay.
+
+Anything that resets the access rules (`expenses.sql`, `fees.sql`, `maintenance/fix_students_table.sql`)
+undoes `viewer-role.sql`: run it again afterwards.
 
 ## Run it on your own machine
 

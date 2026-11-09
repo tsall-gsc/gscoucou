@@ -1,7 +1,7 @@
 // Shared state: who is signed in and what each screen currently shows.
 // Screens read and write these fields directly; nothing here talks to the database.
 
-export const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry' };
+export const ROLE_LABEL = { super_admin: 'Super admin', admin: 'Admin', user: 'Data entry', viewer: 'Read-only' };
 
 export const state = {
   // session
@@ -27,3 +27,7 @@ export const state = {
 // Role checks. The database enforces the same rules; these only decide what to show.
 export const isAdmin = () => ['admin', 'super_admin'].includes(state.profile?.role);
 export const isSuper = () => state.profile?.role === 'super_admin';
+// Everyone except a read-only viewer may enter and edit students and payments.
+export const canWrite = () => ['user', 'admin', 'super_admin'].includes(state.profile?.role);
+// Admins and read-only viewers may open the reports (which include spending).
+export const canSeeMoney = () => ['viewer', 'admin', 'super_admin'].includes(state.profile?.role);

@@ -1,7 +1,7 @@
 // Students screen: an editable table with search and a grade filter. Each cell saves when the person leaves it.
 
 import { db } from '../core/db.js';
-import { state, isAdmin } from '../core/state.js';
+import { state, isAdmin, canWrite } from '../core/state.js';
 import { $, esc, notify, friendly, done } from '../core/ui.js';
 import { nullIfEmpty } from '../core/format.js';
 
@@ -29,9 +29,11 @@ async function renderStudents() {
     const gid = e ? String(e.grade_id) : '';
     const gname = e?.grades?.name || '';
     const q = [s.full_name, s.guardian_name, s.guardian_phone, gname].filter(Boolean).join(' ').toLowerCase();
-    const cell = (field, value, type, label) =>
+    const cell = (field, value, type, label) => !canWrite() ? `<span class="ro">${esc(value)}</span>` :
       `<input type="${type}" data-field="${field}" data-id="${s.id}" data-orig="${esc(value)}" value="${esc(value)}" aria-label="${label} — ${esc(s.full_name)}" ${field === 'full_name' ? 'required' : ''}>`;
-    const gradeCell = yearId
+    const gradeCell = yearId && !canWrite()
+      ? (gname ? `<span class="badge">${esc(gname)}</span>` : '<span class="meta">—</span>')
+      : yearId
       ? `<select data-field="grade" data-id="${s.id}" data-orig="${gid}" aria-label="Grade — ${esc(s.full_name)}">
            ${gid ? '' : '<option value="">Choose grade…</option>'}
            ${grades.map(g => `<option value="${g.id}" ${String(g.id) === gid ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
@@ -43,7 +45,7 @@ async function renderStudents() {
       <td data-label="Parent or guardian">${cell('guardian_name', s.guardian_name ?? '', 'text', 'Parent or guardian')}</td>
       <td data-label="Parent phone">${cell('guardian_phone', s.guardian_phone ?? '', 'tel', 'Parent phone')}</td>
       <td class="tools-cell"><div class="tools"><span class="state" role="status"></span>
-        <button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Details</button>
+        ${canWrite() ? `<button class="btn small" type="button" data-action="edit" data-key="s${s.id}">Details</button>` : ''}
         ${isAdmin() ? `<button class="btn small danger" type="button" data-action="del-student" data-id="${s.id}" data-name="${esc(s.full_name)}">Delete</button>` : ''}
       </div></td></tr>`;
     const detail = state.editing === 's' + s.id
@@ -73,20 +75,20 @@ async function renderStudents() {
   $('#view').innerHTML = `
     <div style="display:grid;gap:1.25rem">
       <h2>Students</h2>
-      <p class="lead">Click any name, grade, parent or phone in the list to change it. Each change is saved as soon as you leave the field. “Details” has birth date, notes and enrollment status.</p>
+      <p class="lead">${canWrite() ? 'Click any name, grade, parent or phone in the list to change it. Each change is saved as soon as you leave the field. “Details” has birth date, notes and enrollment status.' : 'Every student with their grade and their parent’s contact. You have read-only access.'}</p>
       ${yearId ? '' : '<div class="empty">No school year is marked as current, so grades can’t be shown or set. Mark one in School years.</div>'}
-      <form class="add" data-form="student-add">
+      ${!canWrite() ? '' : `<form class="add" data-form="student-add">
         <label>Full name <input type="text" name="full_name" required></label>
         ${gradeField('')}
         <label>Parent or guardian <input type="text" name="guardian_name"></label>
         <label>Parent phone <input type="tel" name="guardian_phone"></label>
         <button class="btn primary" type="submit">Add student</button>
-      </form>
+      </form>`}
       ${filterBar}
       ${sRes.data.length ? `<div class="table-wrap"><table class="grid" id="stu-table">
           <thead><tr><th>Full name</th><th>Grade</th><th>Parent or guardian</th><th>Parent phone</th><th><span class="sr-only">Actions</span></th></tr></thead>
           <tbody>${rows}</tbody></table></div>`
-        : '<div class="empty">No students yet. Add the first one above.</div>'}
+        : `<div class="empty">No students yet.${canWrite() ? ' Add the first one above.' : ''}</div>`}
     </div>`;
   applyStudentFilter();
 }

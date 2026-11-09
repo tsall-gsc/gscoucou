@@ -1,4 +1,4 @@
-// Reports screen (admins only): fees collected, spending, balances and call lists for one school year. The figures are worked out in buildReport().
+// Reports screen (admins and read-only viewers): fees collected, spending, balances and call lists for one school year. The figures are worked out in buildReport().
 
 import { db } from '../core/db.js';
 import { state } from '../core/state.js';
@@ -152,7 +152,7 @@ function drawReports() {
   $('#view').innerHTML = `<div style="display:grid;gap:1.5rem">
     <div style="display:grid;gap:.5rem">
       <h2>Reports</h2>
-      <p class="lead">Figures for one school year, worked out from the payments in Fees and the spending in Expenses. Only admins can see this section.</p>
+      <p class="lead">Figures for one school year, worked out from the payments in Fees and the spending in Expenses. Only admins and read-only report users can see this section.</p>
       <p class="meta">School year ${esc(r.yearLabel)} · ${new Date().toLocaleDateString('en-GB')}</p>
     </div>
     <div class="noprint" style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:end">${yearPicker}
@@ -207,7 +207,7 @@ function applyOwedFilter() {
 //   actions handlers for data-action    changes  handlers for data-change (selects)
 //   inputs  handlers for typing         cells    saves for table cells (data-table="...")
 export const screen = {
-  id: 'reports', group: 'Money', label: 'Reports', render: renderReports, admin: true,
+  id: 'reports', group: 'Money', label: 'Reports', render: renderReports, money: true,
   actions: {
     'export-owed'() {
       const r = state.rep;
