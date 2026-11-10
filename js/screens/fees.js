@@ -1,7 +1,7 @@
 // Fees screen: one row per student with a payment cell per term instalment. The balance is calculated, never typed.
 
 import { db } from '../core/db.js';
-import { state, isAdmin, canWrite } from '../core/state.js';
+import { state, isAdmin, isSuper, canWrite } from '../core/state.js';
 import { $, esc, notify, friendly, done, downloadCsv } from '../core/ui.js';
 import { money, parseMoney, todayLocal, nullIfEmpty } from '../core/format.js';
 
@@ -161,13 +161,23 @@ function drawFees() {
   f.slots = slots;
   const totalSlots = terms.reduce((a, t) => a + slots[t.id], 0);
 
-  const termEditor = isAdmin() ? `<details class="termbox"><summary>Change fee amounts</summary>
+  const hasInstalments = terms.some(t => t.installments !== undefined);
+  const termEditor = isAdmin() ? `<details class="termbox"><summary>Fee types: change amounts or add a fee (such as registration)</summary>
       <form data-form="terms-save" class="add">
-        ${terms.map(t => `<label>Term name <input type="text" name="name_${t.id}" value="${esc(t.name)}" required></label>
+        ${terms.map(t => `<label>Fee name <input type="text" name="name_${t.id}" value="${esc(t.name)}" required></label>
           <label>Amount (GNF) <input type="number" name="amount_${t.id}" min="0" step="1" value="${Number(t.amount)}" required></label>
-          ${t.installments !== undefined ? `<label>Payments allowed <input type="number" name="inst_${t.id}" min="1" max="6" step="1" value="${Number(t.installments) || 1}" required></label>` : ''}`).join('')}
+          ${t.installments !== undefined ? `<label>Payments allowed <input type="number" name="inst_${t.id}" min="1" max="6" step="1" value="${Number(t.installments) || 1}" required></label>` : ''}
+          ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-term" data-id="${t.id}" data-name="${esc(t.name)}">Remove</button>` : ''}`).join('')}
         <button class="btn primary" type="submit">Save</button>
-        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that term. “Payments allowed” is how many payment columns the term has in the table.</p>
+        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that fee. “Payments allowed” is how many payment columns the fee has in the table. A fee can only be removed (super admin) while nobody has paid it.</p>
+      </form>
+      <form data-form="term-add" class="add">
+        <label>New fee <input type="text" name="name" placeholder="e.g. Registration" required></label>
+        <label>Amount (GNF) <input type="text" inputmode="numeric" name="amount" required></label>
+        ${hasInstalments ? `<label>Payments allowed <input type="number" name="installments" min="1" max="6" step="1" value="1" required></label>` : ''}
+        <label>Shown <select name="placement"><option value="first">Before the quarters</option><option value="last">After the quarters</option></select></label>
+        <button class="btn" type="submit">Add fee</button>
+        <p class="meta" style="flex-basis:100%">A new fee applies to every student of this school year and appears as its own column.</p>
       </form></details>` : '';
 
   const rowHtml = r => {
@@ -349,6 +359,18 @@ export const screen = {
       });
       return done(error, 'Payment recorded.', renderFees);
     },
+    async 'term-add'(f) {
+      const amount = parseMoney(f.amount);
+      if (Number.isNaN(amount) || amount <= 0) return notify('Enter an amount above zero, in whole GNF.', true);
+      const orders = (state.fee?.terms || []).map(t => Number(t.sort_order));
+      const row = {
+        school_year_id: Number(state.feeYear), name: f.name.trim(), amount,
+        sort_order: f.placement === 'first' ? Math.min(...orders, 1) - 1 : Math.max(...orders, 0) + 1,
+      };
+      if (f.installments !== undefined) row.installments = Math.min(6, Math.max(1, Number(f.installments) || 1));
+      const { error } = await db.from('fee_terms').insert(row);
+      return done(error, `${row.name} added.`, renderFees);
+    },
     async 'terms-save'(f) {
       const ids = Object.keys(f).map(k => k.match(/^amount_(\d+)$/)).filter(Boolean).map(m => m[1]);
       for (const id of ids) {
@@ -370,6 +392,12 @@ export const screen = {
       if (!confirm('Delete this payment? This can’t be undone.')) return;
       const { error } = await db.from('payments').delete().eq('id', b.dataset.id);
       return done(error, 'Payment deleted.', renderFees);
+    },
+    async 'del-term'(b) {
+      if (!confirm(`Remove the fee “${b.dataset.name}” from this school year? This only works if nobody has paid it yet.`)) return;
+      const res = await db.from('fee_terms').delete().eq('id', b.dataset.id).select('id');
+      const error = res.error || (res.data?.length ? null : { message: 'Your role doesn’t allow this change.' });
+      return done(error, 'Fee removed.', renderFees);
     },
     async 'make-terms'(b) {
       const y = Number(b.dataset.year);

@@ -101,6 +101,14 @@ Roles live in the `profiles` table and are enforced by policies in the database.
    Never use the secret or `service_role` key: this file is public.
 5. Publish: GitHub, Settings, Pages, "Deploy from a branch". The repo must be public on the free plan.
 
+## Fee types
+
+Every fee a student owes (Registration, Quarter 1, Quarter 2, Quarter 3...) is one row of the `fee_terms` table for a
+school year, with an amount and a number of payments allowed. The Fees screen, the balances and the Reports all work
+from that list, so a new fee type needs no code: an admin opens **Fees, Fee types** and adds it (name, amount, payments
+allowed, shown before or after the quarters). Only the super admin can remove one, and only while nobody has paid it.
+Every fee applies to every student of the school year; per-student discounts and exemptions are not supported.
+
 ## Create a read-only user (for example a governor who only needs the reports)
 
 1. Run `db/migrations/viewer-role.sql` once (after `fees.sql` and `expenses.sql`).
