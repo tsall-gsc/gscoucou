@@ -1,7 +1,7 @@
 // Fees screen: one row per student with a payment cell per term instalment. The balance is calculated, never typed.
 
 import { db } from '../core/db.js';
-import { state, isAdmin } from '../core/state.js';
+import { state, isAdmin, isSuper, canWrite } from '../core/state.js';
 import { $, esc, notify, friendly, done, downloadCsv } from '../core/ui.js';
 import { money, parseMoney, todayLocal, nullIfEmpty } from '../core/format.js';
 
@@ -98,8 +98,8 @@ function payCellsHtml(r, t, slots) {
     const cls = `pay ${payClass(paid, t)}${i === 0 ? ' termstart' : ''}`;
     const label = `${esc(shortTerm(t))}${slots > 1 ? ' payment ' + (i + 1) : ''} — ${esc(r.s.full_name)}`;
     const lab = esc(shortTerm(t).replace('Quarter ', 'Q')) + ' PYMT' + (slots > 1 ? ' ' + (i + 1) : '');
-    if (p && !isAdmin()) {
-      html += `<td class="${cls}" data-termcell="${t.id}" data-label="${lab}"><span class="ro">${money(p.amount)}</span></td>`;
+    if (!canWrite() || (p && !isAdmin())) {
+      html += `<td class="${cls}" data-termcell="${t.id}" data-label="${lab}"><span class="ro">${p ? money(p.amount) : '—'}</span></td>`;
     } else if (p || i === tp.length) {
       html += `<td class="${cls}" data-termcell="${t.id}" data-label="${lab}"><input type="text" inputmode="numeric" data-table="fees" data-field="pay" data-term="${t.id}"
         data-payment="${p ? p.id : ''}" data-orig="${p ? Number(p.amount) : 0}" value="${p ? money(p.amount) : ''}" placeholder="0" aria-label="${label}"></td>`;
@@ -121,7 +121,7 @@ function panelHtml(r, terms) {
         <span class="meta">${esc(p.paid_on)}${p.method ? ' · ' + esc(p.method) : ''}${p.note ? ' · ' + esc(p.note) : ''}</span>
         ${isAdmin() ? `<span class="actions"><button class="btn small danger" type="button" data-action="del-payment" data-id="${p.id}">Delete</button></span>` : ''}
       </div>`).join('') : '<p class="meta">No payments yet.</p>'}</div>
-    <form data-form="pay-add" data-id="${r.e.id}">
+    ${!canWrite() ? '' : `<form data-form="pay-add" data-id="${r.e.id}">
       <label>Term <select name="term_id" data-change="pay-term" required>
         ${terms.map(t => { const left = Math.max(Number(t.amount) - (r.paidBy[t.id] || 0), 0);
           return `<option value="${t.id}" data-remaining="${left}" ${t.id === firstOpenTerm.id ? 'selected' : ''}>${esc(t.name)} — ${left > 0 ? money(left) + ' left' : 'paid'}</option>`; }).join('')}
@@ -131,7 +131,7 @@ function panelHtml(r, terms) {
       <label>Method <select name="method">${METHODS.map(m => `<option>${m}</option>`).join('')}</select></label>
       <label>Note <input type="text" name="note" placeholder="Optional"></label>
       <button class="btn primary small" type="submit">Record payment</button>
-    </form></div>`;
+    </form>`}</div>`;
 }
 
 function drawFees() {
@@ -144,9 +144,9 @@ function drawFees() {
       ${years.map(y => `<option value="${y.id}" ${y.id === yearId ? 'selected' : ''}>${esc(y.label)}${y.is_current ? ' (current)' : ''}</option>`).join('')}
     </select></label>`;
   const head = `<h2>Fees</h2>
-    <p class="lead">Type each payment a family makes in the term columns. A term can be paid in several instalments, filled in order. The balance is calculated for you and can’t be typed over. “Details” shows every payment with its date and method. ${isAdmin()
+    <p class="lead">${canWrite() ? 'Type each payment a family makes in the term columns. A term can be paid in several instalments, filled in order. ' : ''}The balance is calculated for you and can’t be typed over. “Details” shows every payment with its date and method. ${isAdmin()
       ? 'As an admin you can also change or remove a payment.'
-      : 'You can record new payments. An admin can correct existing ones.'}</p>${yearPicker}`;
+      : canWrite() ? 'You can record new payments. An admin can correct existing ones.' : 'You have read-only access.'}</p>${yearPicker}`;
 
   if (!terms.length) {
     $('#view').innerHTML = `<div style="display:grid;gap:1.25rem">${head}
@@ -161,25 +161,35 @@ function drawFees() {
   f.slots = slots;
   const totalSlots = terms.reduce((a, t) => a + slots[t.id], 0);
 
-  const termEditor = isAdmin() ? `<details class="termbox"><summary>Change fee amounts</summary>
+  const hasInstalments = terms.some(t => t.installments !== undefined);
+  const termEditor = isAdmin() ? `<details class="termbox"><summary>Fee types: change amounts or add a fee (such as registration)</summary>
       <form data-form="terms-save" class="add">
-        ${terms.map(t => `<label>Term name <input type="text" name="name_${t.id}" value="${esc(t.name)}" required></label>
+        ${terms.map(t => `<label>Fee name <input type="text" name="name_${t.id}" value="${esc(t.name)}" required></label>
           <label>Amount (GNF) <input type="number" name="amount_${t.id}" min="0" step="1" value="${Number(t.amount)}" required></label>
-          ${t.installments !== undefined ? `<label>Payments allowed <input type="number" name="inst_${t.id}" min="1" max="6" step="1" value="${Number(t.installments) || 1}" required></label>` : ''}`).join('')}
+          ${t.installments !== undefined ? `<label>Payments allowed <input type="number" name="inst_${t.id}" min="1" max="6" step="1" value="${Number(t.installments) || 1}" required></label>` : ''}
+          ${isSuper() ? `<button class="btn small danger" type="button" data-action="del-term" data-id="${t.id}" data-name="${esc(t.name)}">Remove</button>` : ''}`).join('')}
         <button class="btn primary" type="submit">Save</button>
-        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that term. “Payments allowed” is how many payment columns the term has in the table.</p>
+        <p class="meta" style="flex-basis:100%">Changing an amount changes what every student owes for that fee. “Payments allowed” is how many payment columns the fee has in the table. A fee can only be removed (super admin) while nobody has paid it.</p>
+      </form>
+      <form data-form="term-add" class="add">
+        <label>New fee <input type="text" name="name" placeholder="e.g. Registration" required></label>
+        <label>Amount (GNF) <input type="text" inputmode="numeric" name="amount" required></label>
+        ${hasInstalments ? `<label>Payments allowed <input type="number" name="installments" min="1" max="6" step="1" value="1" required></label>` : ''}
+        <label>Shown <select name="placement"><option value="first">Before the quarters</option><option value="last">After the quarters</option></select></label>
+        <button class="btn" type="submit">Add fee</button>
+        <p class="meta" style="flex-basis:100%">A new fee applies to every student of this school year and appears as its own column.</p>
       </form></details>` : '';
 
   const rowHtml = r => {
     const isOpen = state.openFee === r.e.id;
     const q = [r.s.full_name, r.g].join(' ').toLowerCase();
-    const gradeCell = `<select data-table="fees" data-field="grade" data-orig="${r.e.grade_id ?? ''}" aria-label="Grade — ${esc(r.s.full_name)}">
+    const gradeCell = !canWrite() ? (r.g ? `<span class="badge">${esc(r.g)}</span>` : '<span class="meta">—</span>') : `<select data-table="fees" data-field="grade" data-orig="${r.e.grade_id ?? ''}" aria-label="Grade — ${esc(r.s.full_name)}">
         ${r.e.grade_id ? '' : '<option value="">Choose grade…</option>'}
         ${grades.map(g => `<option value="${g.id}" ${g.id === r.e.grade_id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
       </select>`;
     const main = `<tr data-enr="${r.e.id}" data-grade="${r.e.grade_id ?? ''}" data-status="${r.balance > 0 ? 'owing' : 'paid'}"
         data-owed="${Math.max(r.balance, 0)}" data-q="${esc(q)}">
-      <td class="col-name wide" data-label="Full name"><input type="text" data-table="fees" data-field="full_name" data-orig="${esc(r.s.full_name)}" value="${esc(r.s.full_name)}" aria-label="Full name — ${esc(r.s.full_name)}" required></td>
+      <td class="col-name wide" data-label="Full name">${canWrite() ? `<input type="text" data-table="fees" data-field="full_name" data-orig="${esc(r.s.full_name)}" value="${esc(r.s.full_name)}" aria-label="Full name — ${esc(r.s.full_name)}" required>` : `<span class="ro">${esc(r.s.full_name)}</span>`}</td>
       <td class="wide" data-label="Grade">${gradeCell}</td>
       ${terms.map(t => payCellsHtml(r, t, slots[t.id])).join('')}
       <td class="wide" data-label="Balance"><span class="bal ${r.balance > 0 ? 'owe' : ''}">${balText(r)}</span></td>
@@ -349,6 +359,18 @@ export const screen = {
       });
       return done(error, 'Payment recorded.', renderFees);
     },
+    async 'term-add'(f) {
+      const amount = parseMoney(f.amount);
+      if (Number.isNaN(amount) || amount <= 0) return notify('Enter an amount above zero, in whole GNF.', true);
+      const orders = (state.fee?.terms || []).map(t => Number(t.sort_order));
+      const row = {
+        school_year_id: Number(state.feeYear), name: f.name.trim(), amount,
+        sort_order: f.placement === 'first' ? Math.min(...orders, 1) - 1 : Math.max(...orders, 0) + 1,
+      };
+      if (f.installments !== undefined) row.installments = Math.min(6, Math.max(1, Number(f.installments) || 1));
+      const { error } = await db.from('fee_terms').insert(row);
+      return done(error, `${row.name} added.`, renderFees);
+    },
     async 'terms-save'(f) {
       const ids = Object.keys(f).map(k => k.match(/^amount_(\d+)$/)).filter(Boolean).map(m => m[1]);
       for (const id of ids) {
@@ -370,6 +392,12 @@ export const screen = {
       if (!confirm('Delete this payment? This can’t be undone.')) return;
       const { error } = await db.from('payments').delete().eq('id', b.dataset.id);
       return done(error, 'Payment deleted.', renderFees);
+    },
+    async 'del-term'(b) {
+      if (!confirm(`Remove the fee “${b.dataset.name}” from this school year? This only works if nobody has paid it yet.`)) return;
+      const res = await db.from('fee_terms').delete().eq('id', b.dataset.id).select('id');
+      const error = res.error || (res.data?.length ? null : { message: 'Your role doesn’t allow this change.' });
+      return done(error, 'Fee removed.', renderFees);
     },
     async 'make-terms'(b) {
       const y = Number(b.dataset.year);

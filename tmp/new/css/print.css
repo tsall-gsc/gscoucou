@@ -1,0 +1,9 @@
+/* Printing a report: hide the menu and the buttons. */
+@media print {
+  aside, .noprint, #msg { display: none !important; }
+  #app { display: block; }
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  .rt-wrap { border: 0; overflow: visible; }
+  .stat, .repsec { break-inside: avoid; }
+}

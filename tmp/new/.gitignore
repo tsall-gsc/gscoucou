@@ -1,0 +1,6 @@
+# Personal data must never reach a public repository
+*.csv
+db/imports/import_teachers.sql
+
+node_modules/
+.DS_Store

@@ -1,0 +1,26 @@
+/* Sign-in page, the app frame (menu + content) and the message bar. */
+/* Login */
+#login { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+.login-box { width: min(26rem, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 2rem; display: grid; gap: 1.1rem; }
+.login-box h1 { font-size: 1.6rem; }
+.login-box .hint { color: var(--muted); font-size: .95rem; }
+
+/* App shell */
+#app { display: grid; grid-template-columns: 15rem 1fr; min-height: 100vh; }
+aside { background: var(--ink); color: #e8ecf3; padding: 1.25rem 1rem; display: flex; flex-direction: column; gap: 1.25rem; }
+aside .brand { font-weight: 700; font-size: 1.15rem; padding: 0 .5rem; }
+nav { display: grid; gap: .15rem; }
+nav button { text-align: left; background: none; border: 0; color: inherit; padding: .55rem .6rem; border-radius: 6px; cursor: pointer; }
+nav button:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+nav button[aria-current=page] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+nav button:disabled { opacity: .45; cursor: default; }
+nav .group { font-size: .85rem; color: #aab4c5; padding: .6rem .6rem .2rem; }
+.who { margin-top: auto; font-size: .9rem; display: grid; gap: .4rem; padding: 0 .5rem; }
+.who .role { color: #aab4c5; }
+.who .btn { background: transparent; color: #e8ecf3; border-color: #4a566b; }
+main { padding: 2rem clamp(1rem, 4vw, 3rem); max-width: 60rem; width: 100%; display: grid; gap: 1.25rem; align-content: start; }
+.lead { color: var(--muted); max-width: 60ch; }
+
+/* Messages */
+#msg { padding: .65rem .9rem; border-radius: 6px; background: var(--ok-bg); }
+#msg.error { background: var(--err-bg); }
