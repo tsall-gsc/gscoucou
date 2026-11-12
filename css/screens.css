@@ -2,7 +2,7 @@
 /* Add form and rows */
 .add { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; }
 .add label { flex: 1 1 10rem; }
-.rows { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.rows { max-width: 64rem; list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
 .rows li { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .75rem 1rem; border-top: 1px solid var(--line); }
 .rows li:first-child { border-top: 0; }
 .rows .grow { flex: 1 1 12rem; font-weight: 700; }
@@ -16,7 +16,7 @@
 /* Reports and expenses */
 h3 { font-size: 1.15rem; line-height: 1.2; margin: 0; }
 .repsec { display: grid; gap: .6rem; }
-.rt-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.rt-wrap { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
 table.rt { width: 100%; border-collapse: collapse; min-width: 30rem; }
 .rt th, .rt td { padding: .55rem .75rem; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
 .rt thead th { border-top: 0; color: var(--muted); font-size: .9rem; }
@@ -40,7 +40,7 @@ table.rt { width: 100%; border-collapse: collapse; min-width: 30rem; }
 
 /* Editable students table */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.table-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.table-wrap { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
 table.grid { width: 100%; border-collapse: collapse; min-width: 58rem; }
 .grid th { text-align: left; font-weight: 700; color: var(--muted); font-size: .95rem; padding: .6rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
 #stu-table th:nth-child(2) { width: 9rem; }
@@ -66,20 +66,20 @@ table.grid { width: 100%; border-collapse: collapse; min-width: 58rem; }
 .grid tr.detail label { flex: 1 1 10rem; }
 
 /* Editable fees table */
-#fee-table { min-width: var(--fee-min, 90rem); }
-#fee-table th.col-name, #fee-table td.col-name { position: sticky; left: 0; z-index: 1; background: var(--card); min-width: 13rem; }
-#fee-table th.col-grade { width: 8rem; }
+#fee-table { min-width: var(--fee-min, 85rem); }
+#fee-table th.col-name, #fee-table td.col-name { position: sticky; left: 0; z-index: 1; background: var(--card); min-width: 11rem; }
+#fee-table th.col-grade { width: 7rem; }
 #fee-table th.col-bal { width: 10rem; }
 #fee-table th.col-tools { width: 6rem; }
 #fee-table th.termgroup { text-align: center; border-left: 1px solid var(--line); }
-#fee-table th.termh { text-align: right; width: 7.5rem; font-weight: 400; }
+#fee-table th.termh { text-align: right; width: 6.5rem; font-weight: 400; }
 #fee-table .termstart { border-left: 1px solid var(--line); }
 .grid td .ro.muted { color: var(--muted); }
 #fee-table th small { display: block; font-weight: 400; }
 .grid td.pay input, .grid td.pay .ro { text-align: right; }
 .grid td.pay.ok { background: var(--ok-bg); }
 .grid td.pay.part { background: #fbf0d9; }
-.grid td .bal { display: block; padding: .4rem .5rem; min-width: 0; }
+.grid td .bal { display: block; padding: .4rem .5rem; min-width: 0; white-space: nowrap; }
 
 /* Fees */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem; }

@@ -4,3 +4,5 @@ db/imports/import_teachers.sql
 
 node_modules/
 .DS_Store
+tmp/
+**/import_teachers.sql

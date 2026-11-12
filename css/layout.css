@@ -6,7 +6,7 @@
 .login-box .hint { color: var(--muted); font-size: .95rem; }
 
 /* App shell */
-#app { display: grid; grid-template-columns: 15rem 1fr; min-height: 100vh; }
+#app { display: grid; grid-template-columns: 15rem minmax(0, 1fr); min-height: 100vh; }
 aside { background: var(--ink); color: #e8ecf3; padding: 1.25rem 1rem; display: flex; flex-direction: column; gap: 1.25rem; }
 aside .brand { font-weight: 700; font-size: 1.15rem; padding: 0 .5rem; }
 nav { display: grid; gap: .15rem; }
@@ -18,7 +18,8 @@ nav .group { font-size: .85rem; color: #aab4c5; padding: .6rem .6rem .2rem; }
 .who { margin-top: auto; font-size: .9rem; display: grid; gap: .4rem; padding: 0 .5rem; }
 .who .role { color: #aab4c5; }
 .who .btn { background: transparent; color: #e8ecf3; border-color: #4a566b; }
-main { padding: 2rem clamp(1rem, 4vw, 3rem); max-width: 60rem; width: 100%; display: grid; gap: 1.25rem; align-content: start; }
+main { padding: 2rem clamp(1rem, 4vw, 3rem); width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; align-content: start; }
+#view { min-width: 0; }
 .lead { color: var(--muted); max-width: 60ch; }
 
 /* Messages */
