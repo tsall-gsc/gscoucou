@@ -22,7 +22,7 @@ css/
   layout.css            Sign-in page, app frame, message bar
   screens.css           Lists, tables, fees, expenses, reports
   print.css             What a printed report hides
-  mobile.css            Phones: top-bar menu, big touch targets, table rows as cards
+  responsive.css        Narrow windows (<1000px) and phones (<720px): top-bar menu, big touch targets, table rows as cards
 js/
   main.js               Entry point: menu, event routing, session. Lists every screen.
   core/

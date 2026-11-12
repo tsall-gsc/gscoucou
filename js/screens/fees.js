@@ -218,7 +218,7 @@ function drawFees() {
   const slotHead = terms.map(t => Array.from({ length: slots[t.id] },
     (_, i) => `<th class="termh${i === 0 ? ' termstart' : ''}" title="${slots[t.id] > 1 ? 'Payment ' + (i + 1) : 'Payment'}">${slots[t.id] > 1 ? 'PYMT ' + (i + 1) : 'PYMT'}</th>`).join('')).join('');
 
-  const table = rows.length ? `<div class="table-wrap"><table class="grid" id="fee-table" style="--fee-min:${37 + totalSlots * 7.5}rem">
+  const table = rows.length ? `<div class="table-wrap"><table class="grid" id="fee-table" style="--fee-min:${34 + totalSlots * 6.5}rem">
       <thead>
         <tr><th rowspan="2" class="col-name">Full name</th><th rowspan="2" class="col-grade">Grade</th>${groupHead}<th rowspan="2" class="col-bal">Balance<small class="meta">calculated</small></th><th rowspan="2" class="col-tools"><span class="sr-only">Actions</span></th></tr>
         <tr>${slotHead}</tr>
